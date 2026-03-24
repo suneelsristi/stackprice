@@ -47,5 +47,8 @@
     "lint": "eslint src/ tests/",
     "format": "prettier --write src/ tests/",
     "prepublishOnly": "npm run build && npm test"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.2"
   }
 }

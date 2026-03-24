@@ -22,13 +22,13 @@
   "homepage": "https://github.com/suneelsristi/stackprice#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/suneelsristi/stackprice.git"
+    "url": "git+https://github.com/suneelsristi/stackprice.git"
   },
   "bugs": {
     "url": "https://github.com/suneelsristi/stackprice/issues"
   },
   "bin": {
-    "stackprice": "./dist/index.js"
+    "stackprice": "dist/index.js"
   },
   "main": "./dist/index.js",
   "files": [

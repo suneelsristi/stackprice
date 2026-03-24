@@ -1,0 +1,51 @@
+{
+  "name": "stackprice",
+  "version": "0.0.1",
+  "description": "AWS CDK infrastructure pricing estimation CLI — know what it costs before you deploy",
+  "keywords": [
+    "aws",
+    "cdk",
+    "aws-cdk",
+    "cost",
+    "pricing",
+    "infrastructure",
+    "finops",
+    "cloudformation",
+    "cli",
+    "devops"
+  ],
+  "author": {
+    "name": "Suneel Sristi",
+    "url": "https://github.com/suneelsristi"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/suneelsristi/stackprice#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/suneelsristi/stackprice.git"
+  },
+  "bugs": {
+    "url": "https://github.com/suneelsristi/stackprice/issues"
+  },
+  "bin": {
+    "stackprice": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "test": "vitest run --coverage",
+    "test:integration": "vitest run tests/integration",
+    "test:watch": "vitest watch",
+    "lint": "eslint src/ tests/",
+    "format": "prettier --write src/ tests/",
+    "prepublishOnly": "npm run build && npm test"
+  }
+}

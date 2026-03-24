@@ -1,0 +1,12 @@
+src/
+tests/
+docs/
+.github/
+.eslintrc.json
+.prettierrc
+tsconfig.json
+vitest.config.ts
+CLAUDE.md
+CONTRIBUTING.md
+*.log
+coverage/

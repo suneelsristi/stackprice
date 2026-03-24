@@ -45,7 +45,7 @@ registration, no external services, no changes to how you write CDK. Just run
 ## Installation
 
 ```bash
-# Via npm (requires Node.js >= 18)
+# Via npm (requires Node.js >= 20)
 npm install -g stackprice
 
 # Via npx (no install required)

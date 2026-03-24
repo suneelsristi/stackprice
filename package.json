@@ -39,14 +39,14 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "scripts": {
-    "build": "tsc --project tsconfig.json",
-    "test": "vitest run --coverage",
-    "test:integration": "vitest run tests/integration",
-    "test:watch": "vitest watch",
-    "lint": "eslint src/ tests/",
-    "format": "prettier --write src/ tests/",
-    "prepublishOnly": "npm run build && npm test"
+"scripts": {
+  "build": "tsc --project tsconfig.json",
+  "test": "vitest run --coverage",
+  "test:integration": "vitest run tests/integration",
+  "test:watch": "vitest watch",
+  "lint": "eslint src/ tests/ --ext .ts",
+  "format": "prettier --write src/ tests/",
+  "prepublishOnly": "npm run build && npm test"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",

@@ -9,6 +9,5 @@ export default defineConfig({
       include: ['src/**/*.ts'],
       exclude: ['src/index.ts'],
     },
-    passWithNoTests: true,
   },
 });

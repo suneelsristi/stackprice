@@ -6,6 +6,8 @@
 returns an itemized monthly cost estimate — per resource, per stack, and in total —
 before a single dollar is spent.
 
+This implementation is written by vibe-coding.
+
 ```bash
 cdk synth
 stackprice breakdown --dir ./cdk.out

@@ -1,0 +1,35 @@
+version: 2
+updates:
+  # npm dependencies — weekly is the community standard for library updates.
+  # Security updates are separate and fire immediately regardless of this schedule.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: chore
+    ignore:
+      # Pin TypeScript to 5.x until @typescript-eslint supports 6.x
+      - dependency-name: typescript
+        versions: ["6.x"]
+
+  # GitHub Actions — daily because a compromised action version can execute
+  # arbitrary code in CI. Low noise (a few PRs per month) but high importance.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: daily
+      time: "09:00"
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - ci
+    commit-message:
+      prefix: ci

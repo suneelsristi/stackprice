@@ -9,12 +9,6 @@ import type { CloudAssembly, StackEnvironment, StackManifest } from './types.js'
 
 const CDK_STACK_ARTIFACT_TYPE = 'aws:cloudformation:stack';
 
-/**
- * CDK cloud assembly schema version 6 is the first version produced by CDK v2.
- * Any manifest with a major schema version below this threshold is CDK v1.
- */
-const MIN_CDK_V2_SCHEMA_MAJOR = 6;
-
 // ─── Internal helpers ────────────────────────────────────────────────────────
 
 function isValidManifestShape(
@@ -29,17 +23,87 @@ function isValidManifestShape(
 }
 
 /**
- * Returns true when the schema major version is below the CDK v2 threshold.
- * An unparseable version string is treated as unknown and returns false
- * (the reader will attempt to continue rather than block on a bad version).
+ * Returns true when the manifest artifacts contain runtimeInfo that
+ * positively identifies the assembly as CDK v1 — i.e. `@aws-cdk/core` is
+ * present in runtimeInfo.libraries without `aws-cdk-lib`.
+ *
+ * The schema version number alone cannot distinguish CDK v1 from v2: CDK v1
+ * produced schema versions well above 6 (e.g. v1.139.0 → schema 16.0.0).
+ * The library-based check is the only reliable signal.
+ *
+ * Returns false (assume CDK v2) when:
+ * - `aws-cdk-lib` is found anywhere → definitely CDK v2
+ * - runtimeInfo or libraries fields are absent → modern assemblies may omit them
+ * - No positive evidence of CDK v1 is found after walking all artifacts
  */
-function isCdkV1Schema(version: string): boolean {
-  // split('.', 1).join('') extracts the major version segment as a plain string,
-  // avoiding noUncheckedIndexedAccess dead branches on array[0] ?? fallback.
-  const majorStr = version.split('.', 1).join('');
-  const major = parseInt(majorStr, 10);
-  if (isNaN(major)) return false;
-  return major < MIN_CDK_V2_SCHEMA_MAJOR;
+function isCdkV1Assembly(artifacts: Record<string, unknown>): boolean {
+  for (const artifactKey of Object.keys(artifacts)) {
+    const artifact = artifacts[artifactKey];
+    if (typeof artifact !== 'object' || artifact === null) continue;
+
+    const artifactRecord = artifact as Record<string, unknown>;
+    const metadata = Object.prototype.hasOwnProperty.call(
+      artifactRecord,
+      'metadata',
+    )
+      ? artifactRecord['metadata']
+      : undefined;
+
+    if (typeof metadata !== 'object' || metadata === null) continue;
+
+    const metadataRecord = metadata as Record<string, unknown>;
+
+    for (const metaPath of Object.keys(metadataRecord)) {
+      const entries = metadataRecord[metaPath];
+      if (!Array.isArray(entries)) continue;
+
+      for (const entry of entries) {
+        if (typeof entry !== 'object' || entry === null) continue;
+
+        const entryRecord = entry as Record<string, unknown>;
+        const data = Object.prototype.hasOwnProperty.call(entryRecord, 'data')
+          ? entryRecord['data']
+          : undefined;
+
+        if (typeof data !== 'object' || data === null) continue;
+
+        const dataRecord = data as Record<string, unknown>;
+        const runtimeInfo = Object.prototype.hasOwnProperty.call(
+          dataRecord,
+          'runtimeInfo',
+        )
+          ? dataRecord['runtimeInfo']
+          : undefined;
+
+        if (typeof runtimeInfo !== 'object' || runtimeInfo === null) continue;
+
+        const runtimeRecord = runtimeInfo as Record<string, unknown>;
+        const libraries = Object.prototype.hasOwnProperty.call(
+          runtimeRecord,
+          'libraries',
+        )
+          ? runtimeRecord['libraries']
+          : undefined;
+
+        if (typeof libraries !== 'object' || libraries === null) continue;
+
+        const libRecord = libraries as Record<string, unknown>;
+
+        // aws-cdk-lib present → definitely CDK v2, stop searching
+        if (Object.prototype.hasOwnProperty.call(libRecord, 'aws-cdk-lib')) {
+          return false;
+        }
+
+        // @aws-cdk/core without aws-cdk-lib → CDK v1
+        if (Object.prototype.hasOwnProperty.call(libRecord, '@aws-cdk/core')) {
+          return true;
+        }
+      }
+    }
+  }
+
+  // No runtimeInfo or no recognisable library markers found → assume CDK v2
+  return false;
 }
 
 /**
@@ -184,7 +248,12 @@ export function readAssembly(dir: string): CloudAssembly {
   }
 
   // ── 5. Detect CDK v1 (ADR-007) ───────────────────────────────────────────
-  if (isCdkV1Schema(parsed.version)) {
+  const artifactsMap =
+    typeof parsed.artifacts === 'object' && parsed.artifacts !== null
+      ? (parsed.artifacts as Record<string, unknown>)
+      : {};
+
+  if (isCdkV1Assembly(artifactsMap)) {
     throw new StackPriceError(
       cdkV1Detected(parsed.version),
       EXIT_CODES.FAILURE,
@@ -192,11 +261,7 @@ export function readAssembly(dir: string): CloudAssembly {
   }
 
   // ── 6. Extract stacks from artifacts ─────────────────────────────────────
-  const stacks =
-    typeof parsed.artifacts === 'object' &&
-    parsed.artifacts !== null
-      ? extractStacks(parsed.artifacts as Record<string, unknown>)
-      : [];
+  const stacks = extractStacks(artifactsMap);
 
   return {
     version: parsed.version,

@@ -41,14 +41,32 @@ const VALID_V2_MANIFEST_SINGLE_STACK = {
   },
 };
 
+// CDK v1 manifests are detected via runtimeInfo.libraries containing
+// @aws-cdk/core without aws-cdk-lib, not by schema version number.
+// CDK v1 produced schema versions well above 6 (e.g. v1.139.0 → schema 16.0.0).
 const CDK_V1_MANIFEST = {
-  version: '5.0.0',
+  version: '16.0.0',
   artifacts: {
     MyStack: {
       type: 'aws:cloudformation:stack',
       environment: 'aws://123456789012/us-east-1',
       properties: {
         templateFile: 'MyStack.template.json',
+      },
+      metadata: {
+        '/MyStack': [
+          {
+            type: 'aws:cdk:app',
+            data: {
+              runtimeInfo: {
+                libraries: {
+                  '@aws-cdk/core': '1.139.0',
+                  '@aws-cdk/aws-s3': '1.139.0',
+                },
+              },
+            },
+          },
+        ],
       },
     },
   },
@@ -231,7 +249,7 @@ describe('readAssembly', () => {
   });
 
   describe('CDK v1 detection — ADR-007', () => {
-    it('throws StackPriceError for schema version 5.0.0', () => {
+    it('throws StackPriceError when @aws-cdk/core is present without aws-cdk-lib', () => {
       const dir = makeTempDir(CDK_V1_MANIFEST);
       expect(() => readAssembly(dir)).toThrow(StackPriceError);
     });
@@ -248,7 +266,7 @@ describe('readAssembly', () => {
       expect((caught as StackPriceError).exitCode).toBe(2);
     });
 
-    it('includes the detected schema version in the error message', () => {
+    it('includes the schema version in the error message', () => {
       const dir = makeTempDir(CDK_V1_MANIFEST);
       let caught: unknown;
       try {
@@ -256,21 +274,69 @@ describe('readAssembly', () => {
       } catch (err) {
         caught = err;
       }
-      expect((caught as StackPriceError).message).toContain('5.0.0');
+      // CDK_V1_MANIFEST has schema version '16.0.0' — a version CDK v1 actually produced
+      expect((caught as StackPriceError).message).toContain('16.0.0');
     });
 
-    it('throws for schema version 1.0.0 (older CDK v1)', () => {
-      const dir = makeTempDir({ ...CDK_V1_MANIFEST, version: '1.0.0' });
+    it('throws for high schema version when @aws-cdk/core is present (old detection was wrong)', () => {
+      // This test proves the old schema-version < 6 check was incorrect:
+      // CDK v1 produced schema versions like 16.0.0, 20.0.0, etc.
+      const v1HighSchemaManifest = {
+        ...CDK_V1_MANIFEST,
+        version: '20.0.0',
+      };
+      const dir = makeTempDir(v1HighSchemaManifest);
       expect(() => readAssembly(dir)).toThrow(StackPriceError);
     });
 
-    it('does NOT throw for schema version 6.0.0 (CDK v2 boundary)', () => {
+    it('does NOT throw when aws-cdk-lib is present (CDK v2)', () => {
+      const dir = makeTempDir(VALID_V2_MANIFEST);
+      expect(() => readAssembly(dir)).not.toThrow();
+    });
+
+    it('does NOT throw when aws-cdk-lib and @aws-cdk/core are both present (aws-cdk-lib wins)', () => {
+      const mixedLibManifest = {
+        version: '36.0.0',
+        artifacts: {
+          MyStack: {
+            type: 'aws:cloudformation:stack',
+            environment: 'aws://123456789012/us-east-1',
+            properties: { templateFile: 'MyStack.template.json' },
+            metadata: {
+              '/MyStack': [
+                {
+                  type: 'aws:cdk:app',
+                  data: {
+                    runtimeInfo: {
+                      libraries: {
+                        'aws-cdk-lib': '2.100.0',
+                        '@aws-cdk/core': '1.139.0', // transitional/compat layer
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      };
+      const dir = makeTempDir(mixedLibManifest);
+      expect(() => readAssembly(dir)).not.toThrow();
+    });
+
+    it('does NOT throw when runtimeInfo is absent (defaults to CDK v2)', () => {
+      // Modern assemblies may omit runtimeInfo entirely — assume v2
       const dir = makeTempDir(EXACT_BOUNDARY_VERSION_6);
       expect(() => readAssembly(dir)).not.toThrow();
     });
 
-    it('does NOT throw for schema version 36.0.0 (CDK v2)', () => {
-      const dir = makeTempDir(VALID_V2_MANIFEST);
+    it('does NOT throw when artifacts have no metadata field (defaults to CDK v2)', () => {
+      const dir = makeTempDir(VALID_V2_MANIFEST_SINGLE_STACK);
+      expect(() => readAssembly(dir)).not.toThrow();
+    });
+
+    it('does NOT throw when manifest has no artifacts (defaults to CDK v2)', () => {
+      const dir = makeTempDir(MANIFEST_NO_ARTIFACTS);
       expect(() => readAssembly(dir)).not.toThrow();
     });
   });
@@ -412,20 +478,211 @@ describe('readAssembly', () => {
     });
   });
 
-  // ── Branch coverage: isCdkV1Schema ────────────────────────────────────────
+  // ── Branch coverage: isCdkV1Assembly ─────────────────────────────────────
 
-  describe('manifest with non-numeric version string', () => {
-    it('does not treat non-numeric version as CDK v1 (does not throw CDK v1 error)', () => {
-      // isNaN branch: parseInt("abc", 10) = NaN → isCdkV1Schema returns false
+  describe('isCdkV1Assembly branch coverage', () => {
+    it('does not throw for a manifest with non-numeric version and no library markers', () => {
+      // Non-numeric version strings are valid — schema version is not used for detection
       const dir = makeTempDir({ version: 'abc.0.0', artifacts: {} });
       const result = readAssembly(dir);
       expect(result.version).toBe('abc.0.0');
     });
 
-    it('returns empty stacks for a manifest with non-numeric version and no stacks', () => {
-      const dir = makeTempDir({ version: 'abc.0.0', artifacts: {} });
+    it('skips artifacts with non-array metadata entries', () => {
+      // metadataRecord[metaPath] is not an array → continue branch
+      const manifest = {
+        version: '36.0.0',
+        artifacts: {
+          MyStack: {
+            type: 'aws:cloudformation:stack',
+            environment: 'aws://123456789012/us-east-1',
+            properties: { templateFile: 'MyStack.template.json' },
+            metadata: {
+              '/MyStack': 'not-an-array', // non-array → skipped
+            },
+          },
+        },
+      };
+      const dir = makeTempDir(manifest);
       const result = readAssembly(dir);
-      expect(result.stacks).toHaveLength(0);
+      expect(result.stacks).toHaveLength(1);
+    });
+
+    it('skips metadata entries with null data field', () => {
+      // data === null → continue branch
+      const manifest = {
+        version: '36.0.0',
+        artifacts: {
+          MyStack: {
+            type: 'aws:cloudformation:stack',
+            environment: 'aws://123456789012/us-east-1',
+            properties: { templateFile: 'MyStack.template.json' },
+            metadata: {
+              '/MyStack': [{ type: 'aws:cdk:app', data: null }],
+            },
+          },
+        },
+      };
+      const dir = makeTempDir(manifest);
+      const result = readAssembly(dir);
+      expect(result.stacks).toHaveLength(1);
+    });
+
+    it('skips metadata entries with non-object runtimeInfo', () => {
+      // runtimeInfo is a string → not object → continue branch
+      const manifest = {
+        version: '36.0.0',
+        artifacts: {
+          MyStack: {
+            type: 'aws:cloudformation:stack',
+            environment: 'aws://123456789012/us-east-1',
+            properties: { templateFile: 'MyStack.template.json' },
+            metadata: {
+              '/MyStack': [
+                { type: 'aws:cdk:app', data: { runtimeInfo: 'not-an-object' } },
+              ],
+            },
+          },
+        },
+      };
+      const dir = makeTempDir(manifest);
+      const result = readAssembly(dir);
+      expect(result.stacks).toHaveLength(1);
+    });
+
+    it('skips metadata entries with null libraries field', () => {
+      // libraries === null → continue branch
+      const manifest = {
+        version: '36.0.0',
+        artifacts: {
+          MyStack: {
+            type: 'aws:cloudformation:stack',
+            environment: 'aws://123456789012/us-east-1',
+            properties: { templateFile: 'MyStack.template.json' },
+            metadata: {
+              '/MyStack': [
+                {
+                  type: 'aws:cdk:app',
+                  data: { runtimeInfo: { libraries: null } },
+                },
+              ],
+            },
+          },
+        },
+      };
+      const dir = makeTempDir(manifest);
+      const result = readAssembly(dir);
+      expect(result.stacks).toHaveLength(1);
+    });
+
+    it('skips a null entry in the metadata entries array', () => {
+      // typeof entry !== 'object' || entry === null → continue branch (null case)
+      const manifest = {
+        version: '36.0.0',
+        artifacts: {
+          MyStack: {
+            type: 'aws:cloudformation:stack',
+            environment: 'aws://123456789012/us-east-1',
+            properties: { templateFile: 'MyStack.template.json' },
+            metadata: {
+              '/MyStack': [null],
+            },
+          },
+        },
+      };
+      const dir = makeTempDir(manifest);
+      const result = readAssembly(dir);
+      expect(result.stacks).toHaveLength(1);
+    });
+
+    it('skips a metadata entry that has no data property', () => {
+      // hasOwnProperty('data') → false → data = undefined → typeof !== 'object' → continue
+      const manifest = {
+        version: '36.0.0',
+        artifacts: {
+          MyStack: {
+            type: 'aws:cloudformation:stack',
+            environment: 'aws://123456789012/us-east-1',
+            properties: { templateFile: 'MyStack.template.json' },
+            metadata: {
+              '/MyStack': [{ type: 'aws:cdk:asset' }], // no data field
+            },
+          },
+        },
+      };
+      const dir = makeTempDir(manifest);
+      const result = readAssembly(dir);
+      expect(result.stacks).toHaveLength(1);
+    });
+
+    it('skips a metadata entry where data has no runtimeInfo property', () => {
+      // hasOwnProperty('runtimeInfo') → false → runtimeInfo = undefined → typeof !== 'object' → continue
+      const manifest = {
+        version: '36.0.0',
+        artifacts: {
+          MyStack: {
+            type: 'aws:cloudformation:stack',
+            environment: 'aws://123456789012/us-east-1',
+            properties: { templateFile: 'MyStack.template.json' },
+            metadata: {
+              '/MyStack': [{ type: 'aws:cdk:app', data: { otherField: true } }],
+            },
+          },
+        },
+      };
+      const dir = makeTempDir(manifest);
+      const result = readAssembly(dir);
+      expect(result.stacks).toHaveLength(1);
+    });
+
+    it('skips a metadata entry where runtimeInfo has no libraries property', () => {
+      // hasOwnProperty('libraries') → false → libraries = undefined → typeof !== 'object' → continue
+      const manifest = {
+        version: '36.0.0',
+        artifacts: {
+          MyStack: {
+            type: 'aws:cloudformation:stack',
+            environment: 'aws://123456789012/us-east-1',
+            properties: { templateFile: 'MyStack.template.json' },
+            metadata: {
+              '/MyStack': [
+                { type: 'aws:cdk:app', data: { runtimeInfo: { version: '2.0.0' } } },
+              ],
+            },
+          },
+        },
+      };
+      const dir = makeTempDir(manifest);
+      const result = readAssembly(dir);
+      expect(result.stacks).toHaveLength(1);
+    });
+
+    it('does NOT throw when libraries contains neither aws-cdk-lib nor @aws-cdk/core', () => {
+      // Both hasOwnProperty checks return false → falls through → returns false (assume v2)
+      const manifest = {
+        version: '36.0.0',
+        artifacts: {
+          MyStack: {
+            type: 'aws:cloudformation:stack',
+            environment: 'aws://123456789012/us-east-1',
+            properties: { templateFile: 'MyStack.template.json' },
+            metadata: {
+              '/MyStack': [
+                {
+                  type: 'aws:cdk:app',
+                  data: {
+                    runtimeInfo: {
+                      libraries: { 'some-other-lib': '1.0.0' },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      };
+      const dir = makeTempDir(manifest);
+      expect(() => readAssembly(dir)).not.toThrow();
     });
   });
 

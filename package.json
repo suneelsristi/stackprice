@@ -61,6 +61,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-pricing": "^3.1023.0",
-    "@aws-sdk/credential-providers": "^3.1023.0"
+    "@aws-sdk/credential-providers": "^3.1023.0",
+    "env-paths": "^4.0.0"
   }
 }

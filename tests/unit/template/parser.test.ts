@@ -242,16 +242,18 @@ describe('parseStacks', () => {
       expect(webServer?.properties['InstanceType']).toBe('m5.large');
     });
 
-    it('sets region from the stub (us-east-1) and source as default-fallback', () => {
+    it('sets region and regionSource from the assembly environment', () => {
       const dir = makeTempDir();
       writeTemplate(dir, 'MyStack.template.json', MULTI_RESOURCE_TEMPLATE);
+      // makeAssembly defaults to environment.region = 'us-east-1'.
+      // resolveRegion('us-east-1') → source: 'template' (real region, not unknown-region).
       const assembly = makeAssembly(dir, [
         { id: 'MyStack', templateFile: 'MyStack.template.json' },
       ]);
 
       const [stack] = parseStacks(assembly, dir);
       expect(stack?.region).toBe('us-east-1');
-      expect(stack?.regionSource).toBe('default-fallback');
+      expect(stack?.regionSource).toBe('template');
     });
 
     it('returns an empty unsupportedTypes array (populated later by engine)', () => {

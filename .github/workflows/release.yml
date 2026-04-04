@@ -5,36 +5,40 @@ on:
     tags: ["v*.*.*"]
 
 jobs:
+  verify-tag-on-main:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag points to a commit on main
+        run: |
+          TAG_COMMIT=$(git rev-list -n 1 ${{ github.ref_name }})
+          MAIN_COMMITS=$(git rev-list origin/main)
+          if ! echo "$MAIN_COMMITS" | grep -q "$TAG_COMMIT"; then
+            echo "ERROR: Tag ${{ github.ref_name }} does not point to a commit on main"
+            exit 1
+          fi
+          echo "✅ Tag points to a commit on main — proceeding with release"
+
   release:
+    needs: verify-tag-on-main
     runs-on: ubuntu-latest
     environment: npm
-
     permissions:
       contents: write
       id-token: write
-
     steps:
       - uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24.x
           registry-url: https://registry.npmjs.org
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Test
-        run: npm test
-
-      - name: Publish to npm (Trusted Publishing)
-        run: npm publish --access public --provenance
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - run: npm publish --access public --provenance
+      - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true

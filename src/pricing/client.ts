@@ -48,36 +48,67 @@ function extractPriceFromItem(item: unknown): PricingApiResult | null {
   const dimKeys = Object.keys(priceDimensions as Record<string, unknown>);
   if (dimKeys.length === 0) return null;
 
-  const firstDim = (priceDimensions as Record<string, unknown>)[dimKeys[0]!];
-  if (typeof firstDim !== 'object' || firstDim === null) return null;
+  // Collect all parseable dimensions; prefer the first non-zero price so that
+  // free-tier $0 dimensions (e.g. DynamoDB first-25-RCU) never shadow the
+  // real paid-tier price.
+  interface ParsedDim {
+    price: number;
+    unit: string;
+    currency: string;
+  }
+  const candidates: ParsedDim[] = [];
 
-  const dimObj = firstDim as Record<string, unknown>;
-  const unit = dimObj['unit'];
-  const pricePerUnitMap = dimObj['pricePerUnit'];
+  for (const key of dimKeys) {
+    const dim = (priceDimensions as Record<string, unknown>)[key];
+    if (typeof dim !== 'object' || dim === null) continue;
 
-  if (typeof unit !== 'string') return null;
-  if (typeof pricePerUnitMap !== 'object' || pricePerUnitMap === null) return null;
+    const dimObj = dim as Record<string, unknown>;
+    const unit = dimObj['unit'];
+    const pricePerUnitMap = dimObj['pricePerUnit'];
 
-  const priceMap = pricePerUnitMap as Record<string, unknown>;
+    if (typeof unit !== 'string') continue;
+    if (typeof pricePerUnitMap !== 'object' || pricePerUnitMap === null) continue;
 
-  // Prefer USD; fall back to the first available currency.
-  const usdValue = priceMap['USD'];
-  if (typeof usdValue === 'string') {
-    const price = parseFloat(usdValue);
-    if (isNaN(price)) return null;
-    return { pricePerUnit: price, unit, currency: 'USD' };
+    const priceMap = pricePerUnitMap as Record<string, unknown>;
+
+    // Prefer USD; fall back to the first available currency.
+    let price: number | undefined;
+    let currency: string | undefined;
+
+    const usdValue = priceMap['USD'];
+    if (typeof usdValue === 'string') {
+      const parsed = parseFloat(usdValue);
+      if (!isNaN(parsed)) {
+        price = parsed;
+        currency = 'USD';
+      }
+    } else {
+      const currencies = Object.keys(priceMap);
+      if (currencies.length > 0) {
+        const firstCurrency = currencies[0]!;
+        const firstValue = priceMap[firstCurrency];
+        if (typeof firstValue === 'string') {
+          const parsed = parseFloat(firstValue);
+          if (!isNaN(parsed)) {
+            price = parsed;
+            currency = firstCurrency;
+          }
+        }
+      }
+    }
+
+    if (price !== undefined && currency !== undefined) {
+      candidates.push({ price, unit, currency });
+    }
   }
 
-  const currencies = Object.keys(priceMap);
-  if (currencies.length === 0) return null;
+  if (candidates.length === 0) return null;
 
-  const firstCurrency = currencies[0]!;
-  const firstValue = priceMap[firstCurrency];
-  if (typeof firstValue !== 'string') return null;
-
-  const price = parseFloat(firstValue);
-  if (isNaN(price)) return null;
-  return { pricePerUnit: price, unit, currency: firstCurrency };
+  // Return the first non-zero candidate; only fall back to zero if every
+  // dimension has pricePerUnit === 0 (e.g. genuinely free resources).
+  const nonZero = candidates.find((c) => c.price !== 0);
+  const chosen = nonZero ?? candidates[0]!;
+  return { pricePerUnit: chosen.price, unit: chosen.unit, currency: chosen.currency };
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────

@@ -77,6 +77,36 @@ describe('fetchPrice', () => {
       expect(result!.pricePerUnit).toBe(0);
     });
 
+    it('skips zero-price free-tier dimension and returns the non-zero paid-tier price', async () => {
+      // DynamoDB-style response: first dimension is $0 free-tier, second is paid.
+      const item = JSON.stringify({
+        terms: {
+          OnDemand: {
+            'OFFERTERM.RATE': {
+              priceDimensions: {
+                'OFFERTERM.RATE.FREE': {
+                  unit: 'RCU-Hr',
+                  pricePerUnit: { USD: '0.0000000000' },
+                },
+                'OFFERTERM.RATE.PAID': {
+                  unit: 'RCU-Hr',
+                  pricePerUnit: { USD: '0.00013000' },
+                },
+              },
+            },
+          },
+        },
+      });
+      mockSend.mockResolvedValue({ PriceList: [item] });
+
+      const result = await fetchPrice(QUERY, REGION);
+
+      expect(result).not.toBeNull();
+      expect(result!.pricePerUnit).toBeCloseTo(0.00013);
+      expect(result!.unit).toBe('RCU-Hr');
+      expect(result!.currency).toBe('USD');
+    });
+
     it('falls back to first non-USD currency when USD is absent', async () => {
       const item = JSON.stringify({
         terms: {

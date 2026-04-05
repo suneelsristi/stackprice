@@ -497,4 +497,173 @@ describe('priceStacks', () => {
       expect(result!.regionSource).toBe('template');
     });
   });
+
+  describe('ECS vCPU fraction multiplier', () => {
+    function makeEcsHandler(vCpuFraction: number): ResourceHandler {
+      return {
+        resourceType: 'AWS::ECS::TaskDefinition',
+        isUsageBased: false,
+        extractPricingAttributes: (_r: ResourceRecord) => ({ cpuUnits: '256', vCpuFraction }),
+        buildPricingQuery: (_a: PricingAttributes, region: string) => ({
+          serviceCode: 'AmazonECS',
+          filters: [{ field: 'cputype', value: 'perCPU' }, { field: 'location', value: region }],
+        }),
+        calculateMonthlyCost: (result: PricingApiResult) =>
+          result.unit === 'hours' ? makeMonthlyPrice(result.pricePerUnit * 730, result.unit) : null,
+      };
+    }
+
+    it('multiplies by 0.25 for 256 CPU units (0.25 vCPU)', async () => {
+      // pricePerUnit=0.04048/hr × 730hr × 0.25 vCPU = 7.3876
+      const apiResult = makeApiResult(0.04048, 'hours');
+      mockFetchPrice.mockResolvedValue(apiResult);
+
+      const handler = makeEcsHandler(0.25);
+      const stack = makeStack([{ logicalId: 'TaskDef', type: 'AWS::ECS::TaskDefinition', properties: {} }]);
+      const registry = makeRegistry(handler);
+
+      const [result] = await priceStacks([stack], registry, false);
+
+      expect(result!.pricedResources).toHaveLength(1);
+      expect(result!.pricedResources[0]!.monthlyCost).toBeCloseTo(0.04048 * 730 * 0.25, 4);
+    });
+
+    it('multiplies by 1 for 1024 CPU units (1 full vCPU)', async () => {
+      const apiResult = makeApiResult(0.04048, 'hours');
+      mockFetchPrice.mockResolvedValue(apiResult);
+
+      const handler = makeEcsHandler(1);
+      const stack = makeStack([{ logicalId: 'TaskDef', type: 'AWS::ECS::TaskDefinition', properties: {} }]);
+      const registry = makeRegistry(handler);
+
+      const [result] = await priceStacks([stack], registry, false);
+
+      expect(result!.pricedResources[0]!.monthlyCost).toBeCloseTo(0.04048 * 730 * 1, 4);
+    });
+
+    it('multiplies by 2 for 2048 CPU units (2 vCPU)', async () => {
+      const apiResult = makeApiResult(0.04048, 'hours');
+      mockFetchPrice.mockResolvedValue(apiResult);
+
+      const handler = makeEcsHandler(2);
+      const stack = makeStack([{ logicalId: 'TaskDef', type: 'AWS::ECS::TaskDefinition', properties: {} }]);
+      const registry = makeRegistry(handler);
+
+      const [result] = await priceStacks([stack], registry, false);
+
+      expect(result!.pricedResources[0]!.monthlyCost).toBeCloseTo(0.04048 * 730 * 2, 4);
+    });
+
+    it('applies ECS vCPU multiplier to conditional resources', async () => {
+      const apiResult = makeApiResult(0.04048, 'hours');
+      mockFetchPrice.mockResolvedValue(apiResult);
+
+      const handler = makeEcsHandler(0.25);
+      const stack = makeStack(
+        [],
+        [makeConditionalResource('CondTask', 'AWS::ECS::TaskDefinition', 'IsProd')],
+      );
+      const registry = makeRegistry(handler);
+
+      const [result] = await priceStacks([stack], registry, false);
+
+      expect(result!.conditionalResources).toHaveLength(1);
+      expect(result!.conditionalResources[0]!.monthlyCost).toBeCloseTo(0.04048 * 730 * 0.25, 4);
+    });
+  });
+
+  describe('DynamoDB RCU multiplier', () => {
+    function makeDynamoHandler(readCapacityUnits: number): ResourceHandler {
+      return {
+        resourceType: 'AWS::DynamoDB::Table',
+        isUsageBased: false,
+        extractPricingAttributes: (_r: ResourceRecord) => ({
+          billingMode: 'PROVISIONED',
+          readCapacityUnits,
+          writeCapacityUnits: 5,
+        }),
+        buildPricingQuery: (_a: PricingAttributes, region: string) => ({
+          serviceCode: 'AmazonDynamoDB',
+          filters: [{ field: 'group', value: 'DDB-ReadUnits' }, { field: 'location', value: region }],
+        }),
+        calculateMonthlyCost: (result: PricingApiResult) =>
+          result.unit === 'ReadCapacityUnit-Hrs'
+            ? makeMonthlyPrice(result.pricePerUnit * 730, result.unit)
+            : null,
+      };
+    }
+
+    it('multiplies by readCapacityUnits for PROVISIONED mode', async () => {
+      // pricePerUnit=$0.00013/RCU-Hr × 730hr × 5 RCUs = $0.4745
+      const apiResult = makeApiResult(0.00013, 'ReadCapacityUnit-Hrs');
+      mockFetchPrice.mockResolvedValue(apiResult);
+
+      const handler = makeDynamoHandler(5);
+      const stack = makeStack([{ logicalId: 'MyTable', type: 'AWS::DynamoDB::Table', properties: {} }]);
+      const registry = makeRegistry(handler);
+
+      const [result] = await priceStacks([stack], registry, false);
+
+      expect(result!.pricedResources).toHaveLength(1);
+      expect(result!.pricedResources[0]!.monthlyCost).toBeCloseTo(0.00013 * 730 * 5, 4);
+    });
+
+    it('multiplies by 1 when readCapacityUnits=1', async () => {
+      const apiResult = makeApiResult(0.00013, 'ReadCapacityUnit-Hrs');
+      mockFetchPrice.mockResolvedValue(apiResult);
+
+      const handler = makeDynamoHandler(1);
+      const stack = makeStack([{ logicalId: 'MyTable', type: 'AWS::DynamoDB::Table', properties: {} }]);
+      const registry = makeRegistry(handler);
+
+      const [result] = await priceStacks([stack], registry, false);
+
+      expect(result!.pricedResources[0]!.monthlyCost).toBeCloseTo(0.00013 * 730, 4);
+    });
+
+    it('does not apply RCU multiplier when billingMode is not PROVISIONED', async () => {
+      // PAY_PER_REQUEST is usage-based; calculateMonthlyCost returns null for wrong unit
+      const usageBasedHandler: ResourceHandler = {
+        resourceType: 'AWS::DynamoDB::Table',
+        isUsageBased: false,
+        extractPricingAttributes: (_r: ResourceRecord) => ({
+          billingMode: 'PAY_PER_REQUEST',
+          isUsageBased: true,
+        }),
+        buildPricingQuery: (_a: PricingAttributes, region: string) => ({
+          serviceCode: 'AmazonDynamoDB',
+          filters: [{ field: 'group', value: 'DDB-RequestUnits' }, { field: 'location', value: region }],
+        }),
+        calculateMonthlyCost: (_result: PricingApiResult) => null,
+      };
+
+      const apiResult = makeApiResult(0.000000125, 'ReadRequestUnits');
+      mockFetchPrice.mockResolvedValue(apiResult);
+
+      const stack = makeStack([{ logicalId: 'MyTable', type: 'AWS::DynamoDB::Table', properties: {} }]);
+      const registry = makeRegistry(usageBasedHandler);
+
+      const [result] = await priceStacks([stack], registry, false);
+
+      // calculateMonthlyCost returns null → resource skipped
+      expect(result!.pricedResources).toHaveLength(0);
+    });
+
+    it('applies DynamoDB RCU multiplier to conditional resources', async () => {
+      const apiResult = makeApiResult(0.00013, 'ReadCapacityUnit-Hrs');
+      mockFetchPrice.mockResolvedValue(apiResult);
+
+      const handler = makeDynamoHandler(10);
+      const stack = makeStack(
+        [],
+        [makeConditionalResource('CondTable', 'AWS::DynamoDB::Table', 'IsProd')],
+      );
+      const registry = makeRegistry(handler);
+
+      const [result] = await priceStacks([stack], registry, false);
+
+      expect(result!.conditionalResources).toHaveLength(1);
+      expect(result!.conditionalResources[0]!.monthlyCost).toBeCloseTo(0.00013 * 730 * 10, 4);
+    });
+  });
 });

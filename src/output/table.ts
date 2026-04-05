@@ -6,6 +6,13 @@ function formatCost(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }
 
+function formatUnitPrice(price: number): string {
+  if (price >= 0.01) return `$${price.toFixed(2)}`;
+  if (price >= 0.0001) return `$${price.toFixed(4)}`;
+  if (price >= 0.0000001) return `$${price.toFixed(7)}`;
+  return `$${price.toFixed(10)}`;
+}
+
 function header(label: string, noColor: boolean): string {
   return noColor ? label : chalk.bold(label);
 }
@@ -37,7 +44,7 @@ function buildUsageTable(stack: PricedStack, noColor: boolean): string {
   });
 
   for (const r of stack.usageBasedResources) {
-    table.push([r.logicalId, r.type, `$${r.unitPrice}/unit`, 'Usage-based — provide estimate via --usage-file']);
+    table.push([r.logicalId, r.type, `${formatUnitPrice(r.unitPrice)}/unit`, 'Usage-based — provide estimate via --usage-file']);
   }
 
   return table.toString();

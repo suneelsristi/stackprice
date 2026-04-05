@@ -145,11 +145,46 @@ describe('ecsHandler', () => {
       );
     });
 
-    it('sets cputype=vCPU filter', () => {
-      const attrs = ecsHandler.extractPricingAttributes(makeFargateResource())!;
+    it('converts Cpu=256 to cputype=0.25 vCPU', () => {
+      const attrs = ecsHandler.extractPricingAttributes(makeFargateResource({ Cpu: '256' }))!;
       const query = ecsHandler.buildPricingQuery(attrs, 'us-east-1');
       const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
-      expect(fields['cputype']).toBe('vCPU');
+      expect(fields['cputype']).toBe('0.25 vCPU');
+    });
+
+    it('converts Cpu=512 to cputype=0.5 vCPU', () => {
+      const attrs = ecsHandler.extractPricingAttributes(makeFargateResource({ Cpu: '512' }))!;
+      const query = ecsHandler.buildPricingQuery(attrs, 'us-east-1');
+      const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
+      expect(fields['cputype']).toBe('0.5 vCPU');
+    });
+
+    it('converts Cpu=1024 to cputype=1 vCPU', () => {
+      const attrs = ecsHandler.extractPricingAttributes(makeFargateResource({ Cpu: '1024' }))!;
+      const query = ecsHandler.buildPricingQuery(attrs, 'us-east-1');
+      const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
+      expect(fields['cputype']).toBe('1 vCPU');
+    });
+
+    it('converts Cpu=2048 to cputype=2 vCPU', () => {
+      const attrs = ecsHandler.extractPricingAttributes(makeFargateResource({ Cpu: '2048' }))!;
+      const query = ecsHandler.buildPricingQuery(attrs, 'us-east-1');
+      const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
+      expect(fields['cputype']).toBe('2 vCPU');
+    });
+
+    it('converts Cpu=4096 to cputype=4 vCPU', () => {
+      const attrs = ecsHandler.extractPricingAttributes(makeFargateResource({ Cpu: '4096' }))!;
+      const query = ecsHandler.buildPricingQuery(attrs, 'us-east-1');
+      const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
+      expect(fields['cputype']).toBe('4 vCPU');
+    });
+
+    it('passes through unknown cpu unit values unchanged', () => {
+      const attrs = ecsHandler.extractPricingAttributes(makeFargateResource({ Cpu: '8192' }))!;
+      const query = ecsHandler.buildPricingQuery(attrs, 'us-east-1');
+      const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
+      expect(fields['cputype']).toBe('8192');
     });
 
     it('maps us-west-2 to US West (Oregon)', () => {

@@ -33,7 +33,7 @@ describe('rdsHandler', () => {
       );
       expect(attrs).not.toBeNull();
       expect(attrs!['instanceType']).toBe('db.t3.medium');
-      expect(attrs!['databaseEngine']).toBe('MySQL');
+      expect(attrs!['databaseEngine']).toBe('MySQL Community Edition');
       expect(attrs!['multiAZ']).toBe(false);
     });
 
@@ -88,39 +88,62 @@ describe('rdsHandler', () => {
       expect(attrs!['databaseEngine']).toBe('PostgreSQL');
     });
 
-    it('maps oracle-ee to Oracle', () => {
+    it('maps mariadb to MariaDB', () => {
       const attrs = rdsHandler.extractPricingAttributes(
-        makeResource({ DBInstanceClass: 'db.t3.medium', Engine: 'oracle-ee' }),
+        makeResource({ DBInstanceClass: 'db.t3.medium', Engine: 'mariadb' }),
       );
-      expect(attrs!['databaseEngine']).toBe('Oracle');
+      expect(attrs!['databaseEngine']).toBe('MariaDB');
     });
 
-    it('maps sqlserver-se to SQL Server', () => {
+    it('maps oracle-se2 to Oracle Standard Edition Two', () => {
+      const attrs = rdsHandler.extractPricingAttributes(
+        makeResource({ DBInstanceClass: 'db.t3.medium', Engine: 'oracle-se2' }),
+      );
+      expect(attrs!['databaseEngine']).toBe('Oracle Standard Edition Two');
+    });
+
+    it('maps sqlserver-se to SQL Server Standard Edition', () => {
       const attrs = rdsHandler.extractPricingAttributes(
         makeResource({ DBInstanceClass: 'db.m5.large', Engine: 'sqlserver-se' }),
       );
-      expect(attrs!['databaseEngine']).toBe('SQL Server');
+      expect(attrs!['databaseEngine']).toBe('SQL Server Standard Edition');
     });
 
-    it('maps aurora-mysql to Aurora MySQL', () => {
+    it('maps sqlserver-ee to SQL Server Enterprise Edition', () => {
       const attrs = rdsHandler.extractPricingAttributes(
-        makeResource({ DBInstanceClass: 'db.r5.large', Engine: 'aurora-mysql' }),
+        makeResource({ DBInstanceClass: 'db.m5.large', Engine: 'sqlserver-ee' }),
       );
-      expect(attrs!['databaseEngine']).toBe('Aurora MySQL');
+      expect(attrs!['databaseEngine']).toBe('SQL Server Enterprise Edition');
     });
 
-    it('maps aurora-postgresql to Aurora PostgreSQL', () => {
+    it('maps sqlserver-ex to SQL Server Express', () => {
       const attrs = rdsHandler.extractPricingAttributes(
-        makeResource({ DBInstanceClass: 'db.r5.large', Engine: 'aurora-postgresql' }),
+        makeResource({ DBInstanceClass: 'db.t3.micro', Engine: 'sqlserver-ex' }),
       );
-      expect(attrs!['databaseEngine']).toBe('Aurora PostgreSQL');
+      expect(attrs!['databaseEngine']).toBe('SQL Server Express');
     });
 
-    it('passes through an unknown engine value unchanged', () => {
+    it('maps sqlserver-web to SQL Server Web', () => {
       const attrs = rdsHandler.extractPricingAttributes(
-        makeResource({ DBInstanceClass: 'db.t3.medium', Engine: 'custom-engine' }),
+        makeResource({ DBInstanceClass: 'db.t3.small', Engine: 'sqlserver-web' }),
       );
-      expect(attrs!['databaseEngine']).toBe('custom-engine');
+      expect(attrs!['databaseEngine']).toBe('SQL Server Web');
+    });
+
+    it('returns null for an unknown engine value', () => {
+      expect(
+        rdsHandler.extractPricingAttributes(
+          makeResource({ DBInstanceClass: 'db.t3.medium', Engine: 'custom-engine' }),
+        ),
+      ).toBeNull();
+    });
+
+    it('returns null for aurora-mysql (not in v0.1.0 map)', () => {
+      expect(
+        rdsHandler.extractPricingAttributes(
+          makeResource({ DBInstanceClass: 'db.r5.large', Engine: 'aurora-mysql' }),
+        ),
+      ).toBeNull();
     });
 
     it('extracts MultiAZ: true correctly', () => {
@@ -196,7 +219,7 @@ describe('rdsHandler', () => {
       )!;
       const query = rdsHandler.buildPricingQuery(attrs, 'us-east-1');
       const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
-      expect(fields['databaseEngine']).toBe('MySQL');
+      expect(fields['databaseEngine']).toBe('MySQL Community Edition');
     });
   });
 

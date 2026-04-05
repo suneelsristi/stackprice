@@ -11,22 +11,17 @@ interface RdsAttributes extends PricingAttributes {
 
 /**
  * Maps CloudFormation Engine property values to AWS Pricing API databaseEngine filter values.
- * Unknown engine values pass through as-is so the caller can still attempt the query.
+ * Engines not in this map cause extractPricingAttributes to return null.
  */
-const CF_ENGINE_TO_PRICING: Record<string, string | undefined> = {
-  mysql: 'MySQL',
+const CF_ENGINE_TO_PRICING: Record<string, string> = {
+  mysql: 'MySQL Community Edition',
   postgres: 'PostgreSQL',
   mariadb: 'MariaDB',
-  'oracle-ee': 'Oracle',
-  'oracle-se': 'Oracle',
-  'oracle-se1': 'Oracle',
-  'oracle-se2': 'Oracle',
-  'sqlserver-ee': 'SQL Server',
-  'sqlserver-se': 'SQL Server',
-  'sqlserver-ex': 'SQL Server',
-  'sqlserver-web': 'SQL Server',
-  'aurora-mysql': 'Aurora MySQL',
-  'aurora-postgresql': 'Aurora PostgreSQL',
+  'oracle-se2': 'Oracle Standard Edition Two',
+  'sqlserver-ex': 'SQL Server Express',
+  'sqlserver-web': 'SQL Server Web',
+  'sqlserver-se': 'SQL Server Standard Edition',
+  'sqlserver-ee': 'SQL Server Enterprise Edition',
 };
 
 export const rdsHandler: ResourceHandler = {
@@ -45,7 +40,8 @@ export const rdsHandler: ResourceHandler = {
     const multiAZRaw = properties['MultiAZ'];
     const multiAZ = typeof multiAZRaw === 'boolean' ? multiAZRaw : false;
 
-    const databaseEngine = CF_ENGINE_TO_PRICING[engine] ?? engine;
+    const databaseEngine = CF_ENGINE_TO_PRICING[engine];
+    if (databaseEngine === undefined) return null;
 
     return { instanceType: instanceClass, databaseEngine, multiAZ } satisfies RdsAttributes;
   },

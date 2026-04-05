@@ -15,6 +15,8 @@ export const lambdaHandler: ResourceHandler = {
   extractPricingAttributes(resource: ResourceRecord): PricingAttributes | null {
     const { properties } = resource;
 
+    if (properties['Handler'] === '__entrypoint__.handler') return null;
+
     const memorySizeRaw = properties['MemorySize'];
     const memorySize = typeof memorySizeRaw === 'number' ? memorySizeRaw : 128;
 
@@ -35,7 +37,7 @@ export const lambdaHandler: ResourceHandler = {
       serviceCode: 'AWSLambda',
       filters: [
         { field: 'group', value: 'AWS-Lambda-Duration' },
-        { field: 'memorysize', value: String(attrs.memorySize) },
+        { field: 'memorysize', value: `${attrs.memorySize} MB` },
         { field: 'location', value: location },
       ],
     };

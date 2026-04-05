@@ -23,31 +23,30 @@ export const dynamodbHandler: ResourceHandler = {
   extractPricingAttributes(resource: ResourceRecord): PricingAttributes | null {
     const { properties } = resource;
 
-    const billingModeRaw = properties['BillingMode'];
-    const billingMode: BillingMode =
-      billingModeRaw === 'PROVISIONED' ? 'PROVISIONED' : 'PAY_PER_REQUEST';
+    // ProvisionedThroughput present → PROVISIONED regardless of BillingMode field.
+    const provisionedRaw = properties['ProvisionedThroughput'];
+    if (typeof provisionedRaw === 'object' && provisionedRaw !== null) {
+      const throughput = provisionedRaw as Record<string, unknown>;
+      const readCapacityUnits = throughput['ReadCapacityUnits'];
+      const writeCapacityUnits = throughput['WriteCapacityUnits'];
 
-    if (billingMode === 'PAY_PER_REQUEST') {
-      return { billingMode, isUsageBased: true } satisfies DynamoDbAttributes;
+      if (typeof readCapacityUnits !== 'number') return null;
+      if (typeof writeCapacityUnits !== 'number') return null;
+
+      return {
+        billingMode: 'PROVISIONED',
+        isUsageBased: false,
+        readCapacityUnits,
+        writeCapacityUnits,
+      } satisfies DynamoDbAttributes;
     }
 
-    // PROVISIONED — ReadCapacityUnits and WriteCapacityUnits are required.
-    const rcuRaw = properties['ProvisionedThroughput'];
-    if (typeof rcuRaw !== 'object' || rcuRaw === null) return null;
+    // Explicit PAY_PER_REQUEST billing mode.
+    if (properties['BillingMode'] === 'PAY_PER_REQUEST') {
+      return { billingMode: 'PAY_PER_REQUEST', isUsageBased: true } satisfies DynamoDbAttributes;
+    }
 
-    const throughput = rcuRaw as Record<string, unknown>;
-    const readCapacityUnits = throughput['ReadCapacityUnits'];
-    const writeCapacityUnits = throughput['WriteCapacityUnits'];
-
-    if (typeof readCapacityUnits !== 'number') return null;
-    if (typeof writeCapacityUnits !== 'number') return null;
-
-    return {
-      billingMode,
-      isUsageBased: false,
-      readCapacityUnits,
-      writeCapacityUnits,
-    } satisfies DynamoDbAttributes;
+    return null;
   },
 
   buildPricingQuery(attributes: PricingAttributes, region: string): PricingQuery {

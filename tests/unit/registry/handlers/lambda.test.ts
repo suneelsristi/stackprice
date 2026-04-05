@@ -74,6 +74,26 @@ describe('lambdaHandler', () => {
       );
       expect(attrs!['architecture']).toBe('arm64');
     });
+
+    it('returns null for CDK internal Lambda with Handler __entrypoint__.handler', () => {
+      expect(
+        lambdaHandler.extractPricingAttributes(
+          makeResource({ Handler: '__entrypoint__.handler', MemorySize: 128 }),
+        ),
+      ).toBeNull();
+    });
+
+    it('does not skip when Handler is a different value', () => {
+      const attrs = lambdaHandler.extractPricingAttributes(
+        makeResource({ Handler: 'index.handler', MemorySize: 256 }),
+      );
+      expect(attrs).not.toBeNull();
+    });
+
+    it('does not skip when Handler is absent', () => {
+      const attrs = lambdaHandler.extractPricingAttributes(makeResource({ MemorySize: 512 }));
+      expect(attrs).not.toBeNull();
+    });
   });
 
   // ─── buildPricingQuery ──────────────────────────────────────────────────────
@@ -92,13 +112,20 @@ describe('lambdaHandler', () => {
       expect(fields['group']).toBe('AWS-Lambda-Duration');
     });
 
-    it('includes memorysize filter with string value', () => {
+    it('includes memorysize filter with MB suffix', () => {
       const attrs = lambdaHandler.extractPricingAttributes(
         makeResource({ MemorySize: 256 }),
       )!;
       const query = lambdaHandler.buildPricingQuery(attrs, 'us-east-1');
       const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
-      expect(fields['memorysize']).toBe('256');
+      expect(fields['memorysize']).toBe('256 MB');
+    });
+
+    it('includes memorysize filter with MB suffix for default 128', () => {
+      const attrs = lambdaHandler.extractPricingAttributes(makeResource({}))!;
+      const query = lambdaHandler.buildPricingQuery(attrs, 'us-east-1');
+      const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
+      expect(fields['memorysize']).toBe('128 MB');
     });
 
     it('maps us-east-1 to the correct location name', () => {

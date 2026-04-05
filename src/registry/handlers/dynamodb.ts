@@ -12,18 +12,19 @@ interface DynamoDbAttributes extends PricingAttributes {
 }
 
 export const dynamodbHandler: ResourceHandler = {
-  /**
-   * Handler-level default is true because the CloudFormation default BillingMode
-   * is PAY_PER_REQUEST, which is usage-based.
-   * For PROVISIONED tables, extractPricingAttributes sets isUsageBased: false.
-   */
   resourceType: 'AWS::DynamoDB::Table',
-  isUsageBased: true,
+  isUsageBased: false,
 
   extractPricingAttributes(resource: ResourceRecord): PricingAttributes | null {
     const { properties } = resource;
 
+    // Explicit PAY_PER_REQUEST billing mode — check first.
+    if (properties['BillingMode'] === 'PAY_PER_REQUEST') {
+      return { billingMode: 'PAY_PER_REQUEST', isUsageBased: true } satisfies DynamoDbAttributes;
+    }
+
     // ProvisionedThroughput present → PROVISIONED regardless of BillingMode field.
+    // CDK omits BillingMode for PROVISIONED tables and just sets ProvisionedThroughput.
     const provisionedRaw = properties['ProvisionedThroughput'];
     if (typeof provisionedRaw === 'object' && provisionedRaw !== null) {
       const throughput = provisionedRaw as Record<string, unknown>;
@@ -39,11 +40,6 @@ export const dynamodbHandler: ResourceHandler = {
         readCapacityUnits,
         writeCapacityUnits,
       } satisfies DynamoDbAttributes;
-    }
-
-    // Explicit PAY_PER_REQUEST billing mode.
-    if (properties['BillingMode'] === 'PAY_PER_REQUEST') {
-      return { billingMode: 'PAY_PER_REQUEST', isUsageBased: true } satisfies DynamoDbAttributes;
     }
 
     return null;
@@ -66,13 +62,13 @@ export const dynamodbHandler: ResourceHandler = {
   },
 
   /**
-   * For PROVISIONED tables the API returns an hourly per-RCU rate (unit: "Hrs").
-   * Monthly cost = pricePerUnit × 730.
-   * For PAY_PER_REQUEST tables the unit is not "Hrs" so this returns null,
-   * consistent with isUsageBased: true for those resources.
+   * For PROVISIONED tables the API returns an hourly per-RCU rate
+   * (unit: "ReadCapacityUnit-Hrs"). Monthly cost = pricePerUnit × 730.
+   * The engine multiplies by readCapacityUnits from the extracted attributes.
+   * For PAY_PER_REQUEST tables returns null (usage-based, no fixed cost).
    */
   calculateMonthlyCost(result: PricingApiResult): MonthlyPrice | null {
-    if (result.unit !== 'Hrs') return null;
+    if (result.unit !== 'ReadCapacityUnit-Hrs') return null;
     return {
       amount: result.pricePerUnit * 730,
       currency: result.currency,

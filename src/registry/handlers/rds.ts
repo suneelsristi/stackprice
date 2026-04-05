@@ -14,14 +14,15 @@ interface RdsAttributes extends PricingAttributes {
  * Engines not in this map cause extractPricingAttributes to return null.
  */
 const CF_ENGINE_TO_PRICING: Record<string, string> = {
-  mysql: 'MySQL Community Edition',
+  mysql: 'MySQL',
   postgres: 'PostgreSQL',
   mariadb: 'MariaDB',
-  'oracle-se2': 'Oracle Standard Edition Two',
-  'sqlserver-ex': 'SQL Server Express',
-  'sqlserver-web': 'SQL Server Web',
-  'sqlserver-se': 'SQL Server Standard Edition',
-  'sqlserver-ee': 'SQL Server Enterprise Edition',
+  'oracle-ee': 'Oracle',
+  'oracle-se2': 'Oracle',
+  'sqlserver-ex': 'SQL Server',
+  'sqlserver-web': 'SQL Server',
+  'sqlserver-se': 'SQL Server',
+  'sqlserver-ee': 'SQL Server',
 };
 
 export const rdsHandler: ResourceHandler = {
@@ -49,7 +50,6 @@ export const rdsHandler: ResourceHandler = {
   buildPricingQuery(attributes: PricingAttributes, region: string): PricingQuery {
     const attrs = attributes as RdsAttributes;
     const location = REGION_TO_LOCATION[region] ?? region;
-    const multiAZStr = attrs.multiAZ ? 'Yes' : 'No';
     const deploymentOption = attrs.multiAZ ? 'Multi-AZ' : 'Single-AZ';
 
     return {
@@ -57,7 +57,6 @@ export const rdsHandler: ResourceHandler = {
       filters: [
         { field: 'instanceType', value: attrs.instanceType },
         { field: 'databaseEngine', value: attrs.databaseEngine },
-        { field: 'multiAZ', value: multiAZStr },
         { field: 'deploymentOption', value: deploymentOption },
         { field: 'location', value: location },
       ],

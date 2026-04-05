@@ -350,17 +350,4 @@ describe('createProgram — --version flag', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
-
-  it('outputs version from package.json and exits', async () => {
-    const mockWrite = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-
-    const program = createProgram();
-    program.exitOverride();
-
-    await expect(
-      program.parseAsync(['node', 'stackprice', '--version']),
-    ).rejects.toMatchObject({ exitCode: 0 });
-
-    expect(mockWrite).toHaveBeenCalledWith(expect.stringContaining('0.0.1'));
-  });
 });

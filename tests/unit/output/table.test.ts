@@ -233,6 +233,49 @@ describe('formatTable', () => {
     });
   });
 
+  describe('unit price formatting (scientific notation)', () => {
+    function makeStackWithUnitPrice(unitPrice: number): PricedStack {
+      return makeStack({
+        pricedResources: [],
+        stackMonthlyCost: 0,
+        usageBasedResources: [
+          { logicalId: 'MyResource', type: 'AWS::SQS::Queue', unitPrice, unit: 'Requests', currency: 'USD' },
+        ],
+      });
+    }
+
+    it('formats very small SQS price (2.4e-7) without scientific notation', () => {
+      const result = formatTable([makeStackWithUnitPrice(2.4e-7)], true);
+      expect(result).toContain('$0.0000002');
+      expect(result).not.toContain('2.4e-7');
+      expect(result).not.toContain('2.4e-');
+    });
+
+    it('formats very small SNS price (5e-7) without scientific notation', () => {
+      const result = formatTable([makeStackWithUnitPrice(5e-7)], true);
+      expect(result).toContain('$0.0000005');
+      expect(result).not.toContain('5e-7');
+      expect(result).not.toContain('5e-');
+    });
+
+    it('formats price >= 0.01 with 2 decimal places', () => {
+      const result = formatTable([makeStackWithUnitPrice(0.022)], true);
+      expect(result).toContain('$0.02');
+      expect(result).not.toMatch(/\d+e[-+]/);
+    });
+
+    it('formats price >= 0.0001 with 4 decimal places', () => {
+      const result = formatTable([makeStackWithUnitPrice(0.000015)], true);
+      expect(result).toContain('$0.0000');
+      expect(result).not.toMatch(/\d+e[-+]/);
+    });
+
+    it('formats price below 1e-7 with 10 decimal places', () => {
+      const result = formatTable([makeStackWithUnitPrice(1e-10)], true);
+      expect(result).not.toMatch(/\d+e[-+]/);
+    });
+  });
+
   describe('multi-stack', () => {
     it('renders headers for each stack', () => {
       const stack1 = makeStack({ stackId: 'StackA', region: 'us-east-1' });

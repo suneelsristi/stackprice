@@ -10,7 +10,7 @@ import type {
 } from './types.js';
 import { buildCacheKey, getFromMemory, getFromFile, setInMemory, setInFile } from './cache.js';
 import { fetchPrice } from './client.js';
-import type { ResourceHandler } from '../registry/handler.js';
+import type { ResourceHandler, PricingAttributes } from '../registry/handler.js';
 import type { ResourceRecord } from '../template/types.js';
 
 // ─── Internal work item ───────────────────────────────────────────────────────
@@ -18,6 +18,7 @@ import type { ResourceRecord } from '../template/types.js';
 interface WorkItem {
   resource: ResourceRecord | ConditionalResourceRecord;
   handler: ResourceHandler;
+  attrs: PricingAttributes;
   query: PricingQuery;
   cacheKey: string;
   isConditional: boolean;
@@ -25,6 +26,30 @@ interface WorkItem {
   result: PricingApiResult | null;
   /** True when result came from cache (no fetch needed). */
   fromCache: boolean;
+}
+
+// ─── Post-calculation multipliers ────────────────────────────────────────────
+
+/**
+ * Applies resource-type-specific multipliers to a calculated monthly cost.
+ * ECS: multiply by vCpuFraction (CPU units → fractional vCPU).
+ * DynamoDB PROVISIONED: multiply by readCapacityUnits.
+ */
+function applyMultipliers(resourceType: string, baseAmount: number, attrs: PricingAttributes): number {
+  if (resourceType === 'AWS::ECS::TaskDefinition') {
+    const vCpuFraction = attrs['vCpuFraction'];
+    if (typeof vCpuFraction === 'number') {
+      return baseAmount * vCpuFraction;
+    }
+  }
+  if (resourceType === 'AWS::DynamoDB::Table') {
+    const billingMode = attrs['billingMode'];
+    const readCapacityUnits = attrs['readCapacityUnits'];
+    if (billingMode === 'PROVISIONED' && typeof readCapacityUnits === 'number') {
+      return baseAmount * readCapacityUnits;
+    }
+  }
+  return baseAmount;
 }
 
 // ─── Engine ───────────────────────────────────────────────────────────────────
@@ -85,6 +110,7 @@ export async function priceStacks(
       workItems.push({
         resource,
         handler,
+        attrs,
         query,
         cacheKey,
         isConditional,
@@ -112,7 +138,7 @@ export async function priceStacks(
 
     // ── Phase 3: classify results ──────────────────────────────────────────────
     for (const item of workItems) {
-      const { resource, handler, isConditional, result } = item;
+      const { resource, handler, attrs, isConditional, result } = item;
 
       if (result === null) {
         // fetchPrice returned null — skip silently per spec.
@@ -135,7 +161,7 @@ export async function priceStacks(
         } else {
           const monthlyPrice = handler.calculateMonthlyCost(result);
           if (monthlyPrice !== null) {
-            condOut.monthlyCost = monthlyPrice.amount;
+            condOut.monthlyCost = applyMultipliers(resource.type, monthlyPrice.amount, attrs);
           }
         }
 
@@ -154,7 +180,7 @@ export async function priceStacks(
           pricedResources.push({
             logicalId: resource.logicalId,
             type: resource.type,
-            monthlyCost: monthlyPrice.amount,
+            monthlyCost: applyMultipliers(resource.type, monthlyPrice.amount, attrs),
             currency: 'USD',
             basis: monthlyPrice.unit,
           });

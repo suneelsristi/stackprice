@@ -4,7 +4,6 @@ import type { ResourceHandler, PricingAttributes, MonthlyPrice } from '../handle
 import { REGION_TO_LOCATION } from '../handler.js';
 
 interface LambdaAttributes extends PricingAttributes {
-  memorySize: number;
   architecture: string;
 }
 
@@ -17,27 +16,22 @@ export const lambdaHandler: ResourceHandler = {
 
     if (properties['Handler'] === '__entrypoint__.handler') return null;
 
-    const memorySizeRaw = properties['MemorySize'];
-    const memorySize = typeof memorySizeRaw === 'number' ? memorySizeRaw : 128;
-
     const architecturesRaw = properties['Architectures'];
     let architecture = 'x86_64';
     if (Array.isArray(architecturesRaw) && typeof architecturesRaw[0] === 'string') {
       architecture = architecturesRaw[0];
     }
 
-    return { memorySize, architecture } satisfies LambdaAttributes;
+    return { architecture } satisfies LambdaAttributes;
   },
 
-  buildPricingQuery(attributes: PricingAttributes, region: string): PricingQuery {
-    const attrs = attributes as LambdaAttributes;
+  buildPricingQuery(_attributes: PricingAttributes, region: string): PricingQuery {
     const location = REGION_TO_LOCATION[region] ?? region;
 
     return {
       serviceCode: 'AWSLambda',
       filters: [
         { field: 'group', value: 'AWS-Lambda-Duration' },
-        { field: 'memorysize', value: `${attrs.memorySize} MB` },
         { field: 'location', value: location },
       ],
     };

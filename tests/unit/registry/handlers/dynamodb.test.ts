@@ -17,7 +17,7 @@ function makeProvisionedResource(rcu = 5, wcu = 5): ResourceRecord {
 }
 
 function makeResult(overrides: Partial<PricingApiResult> = {}): PricingApiResult {
-  return { pricePerUnit: 0.00013, unit: 'Hrs', currency: 'USD', ...overrides };
+  return { pricePerUnit: 0.00013, unit: 'ReadCapacityUnit-Hrs', currency: 'USD', ...overrides };
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -27,8 +27,8 @@ describe('dynamodbHandler', () => {
     expect(dynamodbHandler.resourceType).toBe('AWS::DynamoDB::Table');
   });
 
-  it('handler-level isUsageBased is true (PAY_PER_REQUEST default)', () => {
-    expect(dynamodbHandler.isUsageBased).toBe(true);
+  it('handler-level isUsageBased is false', () => {
+    expect(dynamodbHandler.isUsageBased).toBe(false);
   });
 
   // ─── extractPricingAttributes — PAY_PER_REQUEST ─────────────────────────────
@@ -53,6 +53,17 @@ describe('dynamodbHandler', () => {
           makeResource({ BillingMode: 'UNKNOWN_MODE' }),
         ),
       ).toBeNull();
+    });
+
+    it('PAY_PER_REQUEST takes precedence even when ProvisionedThroughput is present', () => {
+      const attrs = dynamodbHandler.extractPricingAttributes(
+        makeResource({
+          BillingMode: 'PAY_PER_REQUEST',
+          ProvisionedThroughput: { ReadCapacityUnits: 5, WriteCapacityUnits: 5 },
+        }),
+      );
+      expect(attrs).not.toBeNull();
+      expect(attrs!['billingMode']).toBe('PAY_PER_REQUEST');
     });
   });
 
@@ -200,7 +211,7 @@ describe('dynamodbHandler', () => {
   // ─── calculateMonthlyCost ───────────────────────────────────────────────────
 
   describe('calculateMonthlyCost', () => {
-    it('returns pricePerUnit × 730 for unit Hrs (PROVISIONED path)', () => {
+    it('returns pricePerUnit × 730 for unit ReadCapacityUnit-Hrs (PROVISIONED path)', () => {
       const price = dynamodbHandler.calculateMonthlyCost(
         makeResult({ pricePerUnit: 0.00013 }),
       );
@@ -211,10 +222,10 @@ describe('dynamodbHandler', () => {
     it('preserves currency and unit', () => {
       const price = dynamodbHandler.calculateMonthlyCost(makeResult());
       expect(price!.currency).toBe('USD');
-      expect(price!.unit).toBe('Hrs');
+      expect(price!.unit).toBe('ReadCapacityUnit-Hrs');
     });
 
-    it('returns null for a non-Hrs unit (PAY_PER_REQUEST path)', () => {
+    it('returns null for a non-ReadCapacityUnit-Hrs unit (PAY_PER_REQUEST path)', () => {
       expect(
         dynamodbHandler.calculateMonthlyCost(makeResult({ unit: 'Requests' })),
       ).toBeNull();

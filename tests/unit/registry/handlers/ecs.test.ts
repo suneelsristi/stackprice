@@ -19,7 +19,7 @@ function makeFargateResource(overrides: Record<string, unknown> = {}): ResourceR
 }
 
 function makeResult(overrides: Partial<PricingApiResult> = {}): PricingApiResult {
-  return { pricePerUnit: 0.04048, unit: 'Hrs', currency: 'USD', ...overrides };
+  return { pricePerUnit: 0.04048, unit: 'hours', currency: 'USD', ...overrides };
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -39,8 +39,8 @@ describe('ecsHandler', () => {
     it('returns attributes for a valid Fargate resource', () => {
       const attrs = ecsHandler.extractPricingAttributes(makeFargateResource());
       expect(attrs).not.toBeNull();
-      expect(attrs!['cpu']).toBe('256');
-      expect(attrs!['memory']).toBe('512');
+      expect(attrs!['cpuUnits']).toBe('256');
+      expect(attrs!['vCpuFraction']).toBe(0.25);
     });
 
     it('returns null when RequiresCompatibilities is absent', () => {
@@ -95,21 +95,13 @@ describe('ecsHandler', () => {
       ).toBeNull();
     });
 
-    it('returns null when Memory is missing', () => {
-      expect(
-        ecsHandler.extractPricingAttributes(
-          makeResource({ RequiresCompatibilities: ['FARGATE'], Cpu: '256' }),
-        ),
-      ).toBeNull();
-    });
-
-    it('returns null when Memory is not a string', () => {
+    it('returns null when Cpu is not in the known CPU map', () => {
       expect(
         ecsHandler.extractPricingAttributes(
           makeResource({
             RequiresCompatibilities: ['FARGATE'],
-            Cpu: '256',
-            Memory: 512,
+            Cpu: '8192',
+            Memory: '16384',
           }),
         ),
       ).toBeNull();
@@ -126,12 +118,30 @@ describe('ecsHandler', () => {
       expect(attrs).not.toBeNull();
     });
 
-    it('extracts larger cpu/memory values', () => {
-      const attrs = ecsHandler.extractPricingAttributes(
-        makeFargateResource({ Cpu: '4096', Memory: '30720' }),
-      );
-      expect(attrs!['cpu']).toBe('4096');
-      expect(attrs!['memory']).toBe('30720');
+    it('maps Cpu=256 to vCpuFraction=0.25', () => {
+      const attrs = ecsHandler.extractPricingAttributes(makeFargateResource({ Cpu: '256' }))!;
+      expect(attrs['cpuUnits']).toBe('256');
+      expect(attrs['vCpuFraction']).toBe(0.25);
+    });
+
+    it('maps Cpu=512 to vCpuFraction=0.5', () => {
+      const attrs = ecsHandler.extractPricingAttributes(makeFargateResource({ Cpu: '512' }))!;
+      expect(attrs['vCpuFraction']).toBe(0.5);
+    });
+
+    it('maps Cpu=1024 to vCpuFraction=1', () => {
+      const attrs = ecsHandler.extractPricingAttributes(makeFargateResource({ Cpu: '1024' }))!;
+      expect(attrs['vCpuFraction']).toBe(1);
+    });
+
+    it('maps Cpu=2048 to vCpuFraction=2', () => {
+      const attrs = ecsHandler.extractPricingAttributes(makeFargateResource({ Cpu: '2048' }))!;
+      expect(attrs['vCpuFraction']).toBe(2);
+    });
+
+    it('maps Cpu=4096 to vCpuFraction=4', () => {
+      const attrs = ecsHandler.extractPricingAttributes(makeFargateResource({ Cpu: '4096' }))!;
+      expect(attrs['vCpuFraction']).toBe(4);
     });
   });
 
@@ -145,46 +155,22 @@ describe('ecsHandler', () => {
       );
     });
 
-    it('converts Cpu=256 to cputype=0.25 vCPU', () => {
-      const attrs = ecsHandler.extractPricingAttributes(makeFargateResource({ Cpu: '256' }))!;
-      const query = ecsHandler.buildPricingQuery(attrs, 'us-east-1');
-      const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
-      expect(fields['cputype']).toBe('0.25 vCPU');
+    it('uses cputype=perCPU for all CPU sizes', () => {
+      for (const cpu of ['256', '512', '1024', '2048', '4096']) {
+        const attrs = ecsHandler.extractPricingAttributes(makeFargateResource({ Cpu: cpu }))!;
+        const query = ecsHandler.buildPricingQuery(attrs, 'us-east-1');
+        const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
+        expect(fields['cputype']).toBe('perCPU');
+      }
     });
 
-    it('converts Cpu=512 to cputype=0.5 vCPU', () => {
-      const attrs = ecsHandler.extractPricingAttributes(makeFargateResource({ Cpu: '512' }))!;
+    it('has exactly two filters: cputype and location', () => {
+      const attrs = ecsHandler.extractPricingAttributes(makeFargateResource())!;
       const query = ecsHandler.buildPricingQuery(attrs, 'us-east-1');
-      const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
-      expect(fields['cputype']).toBe('0.5 vCPU');
-    });
-
-    it('converts Cpu=1024 to cputype=1 vCPU', () => {
-      const attrs = ecsHandler.extractPricingAttributes(makeFargateResource({ Cpu: '1024' }))!;
-      const query = ecsHandler.buildPricingQuery(attrs, 'us-east-1');
-      const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
-      expect(fields['cputype']).toBe('1 vCPU');
-    });
-
-    it('converts Cpu=2048 to cputype=2 vCPU', () => {
-      const attrs = ecsHandler.extractPricingAttributes(makeFargateResource({ Cpu: '2048' }))!;
-      const query = ecsHandler.buildPricingQuery(attrs, 'us-east-1');
-      const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
-      expect(fields['cputype']).toBe('2 vCPU');
-    });
-
-    it('converts Cpu=4096 to cputype=4 vCPU', () => {
-      const attrs = ecsHandler.extractPricingAttributes(makeFargateResource({ Cpu: '4096' }))!;
-      const query = ecsHandler.buildPricingQuery(attrs, 'us-east-1');
-      const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
-      expect(fields['cputype']).toBe('4 vCPU');
-    });
-
-    it('passes through unknown cpu unit values unchanged', () => {
-      const attrs = ecsHandler.extractPricingAttributes(makeFargateResource({ Cpu: '8192' }))!;
-      const query = ecsHandler.buildPricingQuery(attrs, 'us-east-1');
-      const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
-      expect(fields['cputype']).toBe('8192');
+      expect(query.filters).toHaveLength(2);
+      const fieldNames = query.filters.map((f) => f.field);
+      expect(fieldNames).toContain('cputype');
+      expect(fieldNames).toContain('location');
     });
 
     it('maps us-west-2 to US West (Oregon)', () => {
@@ -212,7 +198,7 @@ describe('ecsHandler', () => {
   // ─── calculateMonthlyCost ───────────────────────────────────────────────────
 
   describe('calculateMonthlyCost', () => {
-    it('returns pricePerUnit × 730 for unit Hrs', () => {
+    it('returns pricePerUnit × 730 for unit hours', () => {
       const price = ecsHandler.calculateMonthlyCost(makeResult({ pricePerUnit: 0.04048 }));
       expect(price).not.toBeNull();
       expect(price!.amount).toBeCloseTo(0.04048 * 730);
@@ -221,11 +207,11 @@ describe('ecsHandler', () => {
     it('preserves currency and unit', () => {
       const price = ecsHandler.calculateMonthlyCost(makeResult());
       expect(price!.currency).toBe('USD');
-      expect(price!.unit).toBe('Hrs');
+      expect(price!.unit).toBe('hours');
     });
 
-    it('returns null for a non-Hrs unit', () => {
-      expect(ecsHandler.calculateMonthlyCost(makeResult({ unit: 'vCPU-Hours' }))).toBeNull();
+    it('returns null for a non-hours unit', () => {
+      expect(ecsHandler.calculateMonthlyCost(makeResult({ unit: 'Hrs' }))).toBeNull();
     });
 
     it('returns null for empty string unit', () => {

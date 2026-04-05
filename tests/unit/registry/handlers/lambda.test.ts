@@ -27,26 +27,12 @@ describe('lambdaHandler', () => {
   // ─── extractPricingAttributes ───────────────────────────────────────────────
 
   describe('extractPricingAttributes', () => {
-    it('returns attributes for a valid resource with explicit values', () => {
+    it('returns attributes for a valid resource with explicit architecture', () => {
       const attrs = lambdaHandler.extractPricingAttributes(
-        makeResource({ MemorySize: 512, Architectures: ['arm64'] }),
+        makeResource({ Architectures: ['arm64'] }),
       );
       expect(attrs).not.toBeNull();
-      expect(attrs!['memorySize']).toBe(512);
       expect(attrs!['architecture']).toBe('arm64');
-    });
-
-    it('defaults MemorySize to 128 when absent', () => {
-      const attrs = lambdaHandler.extractPricingAttributes(makeResource({}));
-      expect(attrs).not.toBeNull();
-      expect(attrs!['memorySize']).toBe(128);
-    });
-
-    it('defaults MemorySize to 128 when wrong type', () => {
-      const attrs = lambdaHandler.extractPricingAttributes(
-        makeResource({ MemorySize: 'big' }),
-      );
-      expect(attrs!['memorySize']).toBe(128);
     });
 
     it('defaults architecture to x86_64 when Architectures is absent', () => {
@@ -112,20 +98,16 @@ describe('lambdaHandler', () => {
       expect(fields['group']).toBe('AWS-Lambda-Duration');
     });
 
-    it('includes memorysize filter with MB suffix', () => {
-      const attrs = lambdaHandler.extractPricingAttributes(
-        makeResource({ MemorySize: 256 }),
-      )!;
+    it('does not include a memorysize filter', () => {
+      const attrs = lambdaHandler.extractPricingAttributes(makeResource({ MemorySize: 256 }))!;
       const query = lambdaHandler.buildPricingQuery(attrs, 'us-east-1');
-      const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
-      expect(fields['memorysize']).toBe('256 MB');
+      expect(query.filters.some((f) => f.field === 'memorysize')).toBe(false);
     });
 
-    it('includes memorysize filter with MB suffix for default 128', () => {
+    it('has exactly two filters: group and location', () => {
       const attrs = lambdaHandler.extractPricingAttributes(makeResource({}))!;
       const query = lambdaHandler.buildPricingQuery(attrs, 'us-east-1');
-      const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
-      expect(fields['memorysize']).toBe('128 MB');
+      expect(query.filters).toHaveLength(2);
     });
 
     it('maps us-east-1 to the correct location name', () => {

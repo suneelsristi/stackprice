@@ -8,6 +8,15 @@ interface EcsAttributes extends PricingAttributes {
   memory: string;
 }
 
+/** Maps Fargate CPU unit strings to the vCPU format required by the AWS Pricing API. */
+const CPU_UNITS_TO_VCPU: Record<string, string> = {
+  '256': '0.25 vCPU',
+  '512': '0.5 vCPU',
+  '1024': '1 vCPU',
+  '2048': '2 vCPU',
+  '4096': '4 vCPU',
+};
+
 /**
  * Checks that RequiresCompatibilities is an array that includes "FARGATE".
  * Returns false for any other type or value.
@@ -36,13 +45,15 @@ export const ecsHandler: ResourceHandler = {
     return { cpu, memory } satisfies EcsAttributes;
   },
 
-  buildPricingQuery(_attributes: PricingAttributes, region: string): PricingQuery {
+  buildPricingQuery(attributes: PricingAttributes, region: string): PricingQuery {
+    const attrs = attributes as EcsAttributes;
     const location = REGION_TO_LOCATION[region] ?? region;
+    const vcpu = CPU_UNITS_TO_VCPU[attrs.cpu] ?? attrs.cpu;
 
     return {
       serviceCode: 'AmazonECS',
       filters: [
-        { field: 'cputype', value: 'vCPU' },
+        { field: 'cputype', value: vcpu },
         { field: 'location', value: location },
       ],
     };

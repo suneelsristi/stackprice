@@ -343,11 +343,3 @@ describe('createProgram — diff command', () => {
     expect(mockExit).toHaveBeenCalledWith(0);
   });
 });
-
-// ─── --version flag ───────────────────────────────────────────────────────────
-
-describe('createProgram — --version flag', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-});

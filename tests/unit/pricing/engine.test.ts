@@ -300,6 +300,29 @@ describe('priceStacks', () => {
       expect(mockFetchPrice).not.toHaveBeenCalled();
     });
 
+    it('does not add CDK internal Lambda (Handler: __entrypoint__.handler) to unsupportedTypes', async () => {
+      const handler = makeUsageHandler({
+        extractPricingAttributes: (_r: ResourceRecord) => {
+          if (_r.properties['Handler'] === '__entrypoint__.handler') return null;
+          return { memorySize: 128 };
+        },
+      });
+      const cdkInternalLambda: ResourceRecord = {
+        logicalId: 'CustomResourceLambda',
+        type: 'AWS::Lambda::Function',
+        properties: { Handler: '__entrypoint__.handler' },
+      };
+      const stack = makeStack([cdkInternalLambda]);
+      const registry = makeRegistry(handler);
+
+      const [result] = await priceStacks([stack], registry, false);
+
+      expect(result!.unsupportedTypes).not.toContain('AWS::Lambda::Function');
+      expect(result!.pricedResources).toHaveLength(0);
+      expect(result!.usageBasedResources).toHaveLength(0);
+      expect(mockFetchPrice).not.toHaveBeenCalled();
+    });
+
     it('deduplicates unsupported types across multiple resources', async () => {
       const stack = makeStack([
         makeResource('Bucket1', 'AWS::S3::Bucket'),

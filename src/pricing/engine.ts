@@ -93,6 +93,14 @@ export async function priceStacks(
 
       const attrs = handler.extractPricingAttributes(resource);
       if (!attrs) {
+        // CDK-internal Lambda functions (Handler: '__entrypoint__.handler') are
+        // intentionally filtered by the lambda handler — skip silently.
+        if (
+          resource.type === 'AWS::Lambda::Function' &&
+          resource.properties['Handler'] === '__entrypoint__.handler'
+        ) {
+          continue;
+        }
         if (!unsupportedTypes.includes(resource.type)) {
           unsupportedTypes.push(resource.type);
         }

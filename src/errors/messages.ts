@@ -3,6 +3,7 @@ export const NO_CREDENTIALS =
   '  stackprice needs pricing:GetProducts to fetch pricing data.\n' +
   '  Fix: export AWS_ACCESS_KEY_ID=... && export AWS_SECRET_ACCESS_KEY=...\n' +
   '  Or:  aws configure\n' +
+  '  Or:  aws login\n' +
   '  Required IAM permission: pricing:GetProducts (read-only, free to call)\n' +
   '  Docs: github.com/suneelsristi/stackprice#credentials';
 

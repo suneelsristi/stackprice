@@ -264,9 +264,10 @@ describe('formatTable', () => {
       expect(result).not.toMatch(/\d+e[-+]/);
     });
 
-    it('formats price >= 0.0001 with 4 decimal places', () => {
+    it('formats price below 0.0001 with trailing zeros stripped', () => {
       const result = formatTable([makeStackWithUnitPrice(0.000015)], true);
-      expect(result).toContain('$0.0000');
+      expect(result).toContain('$0.000015');
+      expect(result).not.toContain('$0.0000150');
       expect(result).not.toMatch(/\d+e[-+]/);
     });
 

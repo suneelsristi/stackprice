@@ -7,10 +7,13 @@ function formatCost(amount: number): string {
 }
 
 function formatUnitPrice(price: number): string {
-  if (price >= 0.01) return `$${price.toFixed(2)}`;
-  if (price >= 0.0001) return `$${price.toFixed(4)}`;
-  if (price >= 0.0000001) return `$${price.toFixed(7)}`;
-  return `$${price.toFixed(10)}`;
+  let raw: string;
+  if (price >= 0.01) raw = price.toFixed(2);
+  else if (price >= 0.0001) raw = price.toFixed(4);
+  else if (price >= 0.0000001) raw = price.toFixed(7);
+  else raw = price.toFixed(10);
+  const stripped = raw.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  return `$${stripped}`;
 }
 
 function header(label: string, noColor: boolean): string {

@@ -10,6 +10,8 @@ import { priceStacks } from '../pricing/engine.js';
 import { formatTable } from '../output/table.js';
 import { formatJson } from '../output/json.js';
 import { formatSummary } from '../output/summary.js';
+import { computeDiff, formatDiffTable, formatDiffJson, formatDiffSummary } from '../output/diff.js';
+import type { BreakdownResult } from '../output/types.js';
 import { ResourceHandlerRegistry } from '../registry/index.js';
 import { ec2Handler } from '../registry/handlers/ec2.js';
 import { rdsHandler } from '../registry/handlers/rds.js';
@@ -22,7 +24,13 @@ import { snsHandler } from '../registry/handlers/sns.js';
 import { StackPriceError } from '../errors/index.js';
 import packageJson from '../../package.json';
 
-// ─── Commander option shape (before mapping to CliOptions) ───────────────────
+// ─── Commander option shapes ──────────────────────────────────────────────────
+
+interface DiffOptions {
+  format: string;
+  color: boolean;   // false when --no-color is passed
+  outFile?: string;
+}
 
 interface BreakdownOptions {
   dir: string;
@@ -34,6 +42,19 @@ interface BreakdownOptions {
   color: boolean;   // false when --no-color is passed
   verbose: boolean;
   cache: boolean;   // false when --no-cache is passed
+}
+
+// ─── Type guards ─────────────────────────────────────────────────────────────
+
+function isBreakdownResult(value: unknown): value is BreakdownResult {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'schemaVersion' in value &&
+    (value as Record<string, unknown>).schemaVersion === '1.0' &&
+    'stacks' in value &&
+    Array.isArray((value as Record<string, unknown>).stacks)
+  );
 }
 
 // ─── Registry factory ─────────────────────────────────────────────────────────
@@ -159,14 +180,97 @@ export function createProgram(): Command {
       }
     });
 
-  // ── diff (coming soon) ─────────────────────────────────────────────────────
+  // ── diff ───────────────────────────────────────────────────────────────────
 
   program
     .command('diff')
-    .description('Compare costs between two CDK assemblies (coming in v0.2.0)')
-    .action(() => {
-      process.stdout.write('stackprice diff is coming in v0.2.0\n');
-      process.exit(0);
+    .description('Compare costs between two stackprice JSON output files')
+    .argument('<before>', 'Path to the first breakdown JSON file')
+    .argument('<after>', 'Path to the second breakdown JSON file')
+    .option('--format <format>', 'Output format: table | json | summary', 'table')
+    .option('--no-color', 'Disable colour output')
+    .option('--out-file <path>', 'Write output to file instead of stdout (optional)')
+    .action((beforeArg: string, afterArg: string, options: DiffOptions) => {
+      const noColor = !options.color;
+
+      try {
+        // ── 1. Validate paths (Security Rule 1 — path validation) ────────────
+        const resolvedBefore = path.resolve(beforeArg);
+        if (!fs.existsSync(resolvedBefore)) {
+          throw new StackPriceError(
+            `File not found: ${beforeArg}. Generate one with: stackprice breakdown --output json --out-file <path>`,
+            2,
+          );
+        }
+
+        const resolvedAfter = path.resolve(afterArg);
+        if (!fs.existsSync(resolvedAfter)) {
+          throw new StackPriceError(
+            `File not found: ${afterArg}. Generate one with: stackprice breakdown --output json --out-file <path>`,
+            2,
+          );
+        }
+
+        // ── 2. Read and parse both files ──────────────────────────────────────
+        let beforeData: unknown;
+        try {
+          beforeData = JSON.parse(fs.readFileSync(resolvedBefore, 'utf-8') as string);
+        } catch {
+          throw new StackPriceError(`${beforeArg} is not a valid JSON file`, 2);
+        }
+
+        let afterData: unknown;
+        try {
+          afterData = JSON.parse(fs.readFileSync(resolvedAfter, 'utf-8') as string);
+        } catch {
+          throw new StackPriceError(`${afterArg} is not a valid JSON file`, 2);
+        }
+
+        // ── 3. Type-guard: verify schema ──────────────────────────────────────
+        if (!isBreakdownResult(beforeData)) {
+          throw new StackPriceError(
+            `${beforeArg} is not a valid stackprice output file. Generate one with: stackprice breakdown --output json --out-file <path>`,
+            2,
+          );
+        }
+
+        if (!isBreakdownResult(afterData)) {
+          throw new StackPriceError(
+            `${afterArg} is not a valid stackprice output file. Generate one with: stackprice breakdown --output json --out-file <path>`,
+            2,
+          );
+        }
+
+        // ── 4. Compute diff ───────────────────────────────────────────────────
+        const diff = computeDiff(beforeData, afterData, resolvedBefore, resolvedAfter);
+
+        // ── 5. Format output ──────────────────────────────────────────────────
+        const format = options.format as 'table' | 'json' | 'summary';
+        let formatted: string;
+        if (format === 'json') {
+          formatted = formatDiffJson(diff);
+        } else if (format === 'summary') {
+          formatted = formatDiffSummary(diff);
+        } else {
+          formatted = formatDiffTable(diff, noColor);
+        }
+
+        // ── 6. Write output ───────────────────────────────────────────────────
+        if (options.outFile !== undefined) {
+          const resolvedOutFile = path.resolve(options.outFile);
+          fs.writeFileSync(resolvedOutFile, formatted + '\n', 'utf-8');
+        } else {
+          process.stdout.write(formatted + '\n');
+        }
+      } catch (err: unknown) {
+        if (err instanceof StackPriceError) {
+          process.stderr.write(`Error: ${err.message}\n`);
+          process.exit(err.exitCode);
+        } else {
+          process.stderr.write(`An unexpected error occurred. Use --verbose for details.\n`);
+          process.exit(2);
+        }
+      }
     });
 
   return program;

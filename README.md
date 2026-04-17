@@ -2,6 +2,10 @@
 
 **AWS CDK infrastructure pricing estimation CLI — know what it costs before you deploy.**
 
+[![npm version](https://img.shields.io/npm/v/stackprice)](https://npmjs.com/package/stackprice)
+[![CI](https://github.com/suneelsristi/stackprice/actions/workflows/ci.yml/badge.svg)](https://github.com/suneelsristi/stackprice/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 `stackprice` is an open source CLI tool that reads your synthesized CDK output and
 returns an itemized monthly cost estimate — per resource, per stack, and in total —
 before a single dollar is spent.
@@ -76,6 +80,10 @@ stackprice breakdown --dir ./cdk.out --output json --out-file estimate.json
 
 # One-line summary
 stackprice breakdown --dir ./cdk.out --output summary
+
+# Compare two cost estimates
+stackprice diff before.json after.json
+stackprice diff before.json after.json --format summary
 ```
 
 ---
@@ -96,6 +104,11 @@ stackprice breakdown --dir ./cdk.out --output summary
 
 `stackprice` uses the standard AWS credential chain. If you can run `cdk deploy`,
 your credentials already work. No extra setup needed.
+
+```bash
+aws configure
+```
+Or:  aws login      (IAM Identity Center / SSO)
 
 **Region resolution order:**
 1. Region declared in the CDK template
@@ -125,9 +138,16 @@ Analyze a CDK cloud assembly and output pricing estimates.
 | `--no-color` | bool | false | Disable color output |
 | `--verbose` | bool | false | Show pricing API queries and resolution details |
 
-### `stackprice diff` *(coming in v0.2.0)*
+### `stackprice diff`
 
-Compare two breakdown JSON outputs and show the cost delta per resource and in total.
+Compare two breakdown JSON outputs and show cost delta per resource
+and in total.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--format` | enum | `table` | Output format: `table`, `json`, `summary` |
+| `--out-file` | string | — | Write output to file instead of stdout |
+| `--no-color` | bool | false | Disable color output |
 
 ---
 
@@ -143,6 +163,7 @@ Compare two breakdown JSON outputs and show the cost delta per resource and in t
 | `AWS::ECS::TaskDefinition` | Fixed (Fargate vCPU + memory) |
 | `AWS::SQS::Queue` | Usage-based (requests) |
 | `AWS::SNS::Topic` | Usage-based (notifications) |
+| `AWS::ElastiCache::CacheCluster` | Fixed (on-demand hourly x 730 hrs/month) |
 
 Unsupported resource types are skipped with a warning and listed at the end of output.
 They never cause the tool to fail.
@@ -179,11 +200,12 @@ and never sends your template data to any external service. All processing is lo
 | Version | Feature |
 |---|---|
 | v0.2.0 | `stackprice diff` — cost delta between two estimates |
-| v0.2.0 | GitHub Actions integration — PR cost comments |
-| v0.2.0 | `--conditions` flag — evaluate CloudFormation Conditions |
-| v0.2.0 | Expanded resource coverage: ElastiCache, EKS, CloudFront, API Gateway |
+| v0.2.0 | ElastiCache support |
+| v0.2.0 | GitHub Actions CI integration docs |
+| v0.2.0 | API Gateway — blocked pending v0.3.0 bulk pricing fix |
 | v0.3.0 | `--usage-file` — provide usage estimates for Lambda, S3, data transfer |
 | v0.3.0 | `--offline` mode — no credentials required |
+| v0.3.0 | API Gateway via AWS bulk pricing files |
 | v0.4.0 | Savings Plans / Reserved Instance comparison |
 | v1.0.0 | Native CloudFormation template support (outside CDK) |
 | v1.0.0 | VS Code extension with inline cost annotations |
@@ -215,3 +237,4 @@ Built with [AWS SDK for JavaScript v3](https://github.com/aws/aws-sdk-js-v3),
 [commander.js](https://github.com/tj/commander.js),
 [cli-table3](https://github.com/cli-table/cli-table3), and
 [chalk](https://github.com/chalk/chalk).
+Implementation written with Claude Code.

@@ -4,7 +4,7 @@ import type { ResourceHandler, PricingAttributes, MonthlyPrice } from '../handle
 import { REGION_TO_LOCATION } from '../handler.js';
 
 interface ElastiCacheAttributes extends PricingAttributes {
-  cacheNodeType: string;
+  instanceType: string;
   cacheEngine: string;
   numCacheNodes: number;
 }
@@ -37,7 +37,7 @@ export const elasticacheHandler: ResourceHandler = {
     const numCacheNodesRaw = properties['NumCacheNodes'];
     const numCacheNodes = typeof numCacheNodesRaw === 'number' ? numCacheNodesRaw : 1;
 
-    return { cacheNodeType, cacheEngine, numCacheNodes } satisfies ElastiCacheAttributes;
+    return { instanceType: cacheNodeType, cacheEngine, numCacheNodes } satisfies ElastiCacheAttributes;
   },
 
   buildPricingQuery(attributes: PricingAttributes, region: string): PricingQuery {
@@ -47,7 +47,7 @@ export const elasticacheHandler: ResourceHandler = {
     return {
       serviceCode: 'AmazonElastiCache',
       filters: [
-        { field: 'cacheNodeType', value: attrs.cacheNodeType },
+        { field: 'instanceType', value: attrs.instanceType },
         { field: 'cacheEngine', value: attrs.cacheEngine },
         { field: 'location', value: location },
       ],

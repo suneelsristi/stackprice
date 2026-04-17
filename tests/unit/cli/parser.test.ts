@@ -226,7 +226,7 @@ describe('createProgram — breakdown command', () => {
     expect(mockExit).toHaveBeenCalledWith(EXIT_CODES.FAILURE);
   });
 
-  it('unknown error caught → generic stderr message + exit 2', async () => {
+  it('unknown error caught without --verbose → hint included in message', async () => {
     mockCheckCredentials.mockRejectedValue(new Error('unexpected failure'));
 
     const program = createProgram();
@@ -234,6 +234,25 @@ describe('createProgram — breakdown command', () => {
 
     expect(mockStderr).toHaveBeenCalledWith(
       'An unexpected error occurred. Use --verbose for details.\n',
+    );
+    expect(mockExit).toHaveBeenCalledWith(2);
+  });
+
+  it('unknown error caught with --verbose → no hint, stack trace printed', async () => {
+    const err = new Error('unexpected failure');
+    mockCheckCredentials.mockRejectedValue(err);
+
+    const program = createProgram();
+    await program.parseAsync([
+      'node', 'stackprice', 'breakdown',
+      '--dir', '/fake/cdk.out',
+      '--verbose',
+    ]);
+
+    expect(mockStderr).toHaveBeenCalledWith('An unexpected error occurred.\n');
+    expect(mockStderr).toHaveBeenCalledWith(expect.stringContaining('Error: unexpected failure'));
+    expect(mockStderr).not.toHaveBeenCalledWith(
+      expect.stringContaining('Use --verbose'),
     );
     expect(mockExit).toHaveBeenCalledWith(2);
   });
@@ -546,5 +565,18 @@ describe('createProgram — diff command', () => {
     ]);
 
     expect(mockFormatDiffTable).toHaveBeenCalledWith(expect.any(Object), true);
+  });
+
+  it('unknown error caught → generic message with no --verbose hint', async () => {
+    mockComputeDiff.mockImplementation(() => { throw new Error('unexpected failure'); });
+
+    const program = createProgram();
+    await program.parseAsync(['node', 'stackprice', 'diff', '/fake/before.json', '/fake/after.json']);
+
+    expect(mockStderr).toHaveBeenCalledWith('An unexpected error occurred.\n');
+    expect(mockStderr).not.toHaveBeenCalledWith(
+      expect.stringContaining('Use --verbose'),
+    );
+    expect(mockExit).toHaveBeenCalledWith(2);
   });
 });

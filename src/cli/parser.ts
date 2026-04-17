@@ -174,9 +174,16 @@ export function createProgram(): Command {
       } catch (err: unknown) {
         if (err instanceof StackPriceError) {
           process.stderr.write(`Error: ${err.message}\n`);
+          if (options.verbose && err.stack) {
+            process.stderr.write(`${err.stack}\n`);
+          }
           process.exit(err.exitCode);
         } else {
-          process.stderr.write(`An unexpected error occurred. Use --verbose for details.\n`);
+          const hint = options.verbose ? '' : ' Use --verbose for details.';
+          process.stderr.write(`An unexpected error occurred.${hint}\n`);
+          if (options.verbose && err instanceof Error && err.stack) {
+            process.stderr.write(`${err.stack}\n`);
+          }
           process.exit(2);
         }
       }
@@ -269,7 +276,7 @@ export function createProgram(): Command {
           process.stderr.write(`Error: ${err.message}\n`);
           process.exit(err.exitCode);
         } else {
-          process.stderr.write(`An unexpected error occurred. Use --verbose for details.\n`);
+          process.stderr.write(`An unexpected error occurred.\n`);
           process.exit(2);
         }
       }

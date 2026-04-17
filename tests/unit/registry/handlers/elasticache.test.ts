@@ -96,11 +96,11 @@ describe('elasticacheHandler', () => {
       expect(attrs!['numCacheNodes']).toBe(5);
     });
 
-    it('preserves cacheNodeType from CacheNodeType', () => {
+    it('preserves instanceType from CacheNodeType', () => {
       const attrs = elasticacheHandler.extractPricingAttributes(
         makeResource({ CacheNodeType: 'cache.r6g.xlarge', Engine: 'redis' }),
       );
-      expect(attrs!['cacheNodeType']).toBe('cache.r6g.xlarge');
+      expect(attrs!['instanceType']).toBe('cache.r6g.xlarge');
     });
   });
 
@@ -116,13 +116,13 @@ describe('elasticacheHandler', () => {
       );
     });
 
-    it('sets cacheNodeType filter to CacheNodeType value', () => {
+    it('sets instanceType filter to CacheNodeType value', () => {
       const attrs = elasticacheHandler.extractPricingAttributes(
         makeResource({ CacheNodeType: 'cache.m6g.large', Engine: 'redis' }),
       )!;
       const query = elasticacheHandler.buildPricingQuery(attrs, 'us-east-1');
       const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
-      expect(fields['cacheNodeType']).toBe('cache.m6g.large');
+      expect(fields['instanceType']).toBe('cache.m6g.large');
     });
 
     it('sets cacheEngine filter to mapped engine value', () => {

@@ -49,6 +49,12 @@ function applyMultipliers(resourceType: string, baseAmount: number, attrs: Prici
       return baseAmount * readCapacityUnits;
     }
   }
+  if (resourceType === 'AWS::ElastiCache::CacheCluster') {
+    const numCacheNodes = attrs['numCacheNodes'];
+    if (typeof numCacheNodes === 'number') {
+      return baseAmount * numCacheNodes;
+    }
+  }
   return baseAmount;
 }
 

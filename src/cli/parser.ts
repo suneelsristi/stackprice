@@ -21,6 +21,7 @@ import { dynamodbHandler } from '../registry/handlers/dynamodb.js';
 import { ecsHandler } from '../registry/handlers/ecs.js';
 import { sqsHandler } from '../registry/handlers/sqs.js';
 import { snsHandler } from '../registry/handlers/sns.js';
+import { elasticacheHandler } from '../registry/handlers/elasticache.js';
 import { StackPriceError } from '../errors/index.js';
 import packageJson from '../../package.json';
 
@@ -69,6 +70,7 @@ function createRegistry(): ResourceHandlerRegistry {
   registry.register(ecsHandler);
   registry.register(sqsHandler);
   registry.register(snsHandler);
+  registry.register(elasticacheHandler);
   return registry;
 }
 
@@ -172,9 +174,16 @@ export function createProgram(): Command {
       } catch (err: unknown) {
         if (err instanceof StackPriceError) {
           process.stderr.write(`Error: ${err.message}\n`);
+          if (options.verbose && err.stack) {
+            process.stderr.write(`${err.stack}\n`);
+          }
           process.exit(err.exitCode);
         } else {
-          process.stderr.write(`An unexpected error occurred. Use --verbose for details.\n`);
+          const hint = options.verbose ? '' : ' Use --verbose for details.';
+          process.stderr.write(`An unexpected error occurred.${hint}\n`);
+          if (options.verbose && err instanceof Error && err.stack) {
+            process.stderr.write(`${err.stack}\n`);
+          }
           process.exit(2);
         }
       }
@@ -267,7 +276,7 @@ export function createProgram(): Command {
           process.stderr.write(`Error: ${err.message}\n`);
           process.exit(err.exitCode);
         } else {
-          process.stderr.write(`An unexpected error occurred. Use --verbose for details.\n`);
+          process.stderr.write(`An unexpected error occurred.\n`);
           process.exit(2);
         }
       }

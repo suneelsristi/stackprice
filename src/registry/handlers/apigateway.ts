@@ -3,6 +3,13 @@ import type { PricingQuery, PricingApiResult } from '../../pricing/types.js';
 import type { ResourceHandler, PricingAttributes, MonthlyPrice } from '../handler.js';
 import { REGION_TO_LOCATION } from '../handler.js';
 
+// NOTE: This handler is intentionally not registered in the CLI.
+// The AWS Price List API does not expose REST API per-request
+// pricing via GetProducts. The handler logic is correct — only
+// the pricing data source needs to change.
+// See GitHub issue #38 for full analysis and planned fix
+// using AWS bulk pricing files in v0.3.0.
+
 interface ApiGatewayAttributes extends PricingAttributes {
   endpointType: 'REGIONAL' | 'EDGE' | 'PRIVATE';
 }

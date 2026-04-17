@@ -3,6 +3,25 @@
 All notable changes to stackprice are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com).
 
+## [0.2.0] - 2026-04-18
+
+### Added
+- `stackprice diff` — compare two breakdown JSON outputs and
+  show cost delta per resource and in total, with both absolute
+  and percentage changes. Supports table, JSON, and summary
+  output formats.
+- ElastiCache handler — AWS::ElastiCache::CacheCluster
+  (Redis and Memcached, single and multi-node clusters)
+- CI integration docs — GitHub Actions workflow recipes for
+  cost estimates and cost diffs on pull requests
+  (see docs/ci-integration.md)
+
+### Known Limitations
+- AWS::ApiGateway::RestApi cannot be priced via the AWS Price
+  List API — the per-request pricing is not exposed through
+  GetProducts. See GitHub issue #38 for full analysis.
+  Planned fix in v0.3.0 using AWS bulk pricing files.
+
 ## [0.1.0] - 2026-04-05
 
 ### Added

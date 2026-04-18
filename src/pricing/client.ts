@@ -55,6 +55,7 @@ function extractPriceFromItem(item: unknown): PricingApiResult | null {
     price: number;
     unit: string;
     currency: string;
+    beginRange?: string | number;
   }
   const candidates: ParsedDim[] = [];
 
@@ -65,6 +66,7 @@ function extractPriceFromItem(item: unknown): PricingApiResult | null {
     const dimObj = dim as Record<string, unknown>;
     const unit = dimObj['unit'];
     const pricePerUnitMap = dimObj['pricePerUnit'];
+    const beginRange = dimObj['beginRange'];
 
     if (typeof unit !== 'string') continue;
     if (typeof pricePerUnitMap !== 'object' || pricePerUnitMap === null) continue;
@@ -98,16 +100,26 @@ function extractPriceFromItem(item: unknown): PricingApiResult | null {
     }
 
     if (price !== undefined && currency !== undefined) {
-      candidates.push({ price, unit, currency });
+      const entry: ParsedDim = { price, unit, currency };
+      if (typeof beginRange === 'string' || typeof beginRange === 'number') {
+        entry.beginRange = beginRange;
+      }
+      candidates.push(entry);
     }
   }
 
   if (candidates.length === 0) return null;
 
-  // Return the first non-zero candidate; only fall back to zero if every
-  // dimension has pricePerUnit === 0 (e.g. genuinely free resources).
+  // For tiered pricing (e.g. API Gateway), prefer the Tier 1 dimension
+  // (beginRange === 0) which is the standard first-tier rate. Fall back to
+  // the first non-zero candidate for services with no beginRange field.
+  // Only fall back to zero if every dimension has pricePerUnit === 0
+  // (e.g. genuinely free resources).
+  const tier1 = candidates.find(
+    (c) => (c.beginRange === '0' || c.beginRange === 0) && c.price !== 0,
+  );
   const nonZero = candidates.find((c) => c.price !== 0);
-  const chosen = nonZero ?? candidates[0]!;
+  const chosen = tier1 ?? nonZero ?? candidates[0]!;
   return { pricePerUnit: chosen.price, unit: chosen.unit, currency: chosen.currency };
 }
 

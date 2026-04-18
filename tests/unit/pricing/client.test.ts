@@ -77,6 +77,73 @@ describe('fetchPrice', () => {
       expect(result!.pricePerUnit).toBe(0);
     });
 
+    it('prefers beginRange=0 dimension over other tiers in tiered pricing', async () => {
+      // API Gateway-style response: four tiers, beginRange=0 is the Tier 1 price.
+      const item = JSON.stringify({
+        terms: {
+          OnDemand: {
+            'OFFERTERM.RATE': {
+              priceDimensions: {
+                'OFFERTERM.RATE.TIER4': {
+                  unit: 'Requests',
+                  beginRange: '20000000000',
+                  pricePerUnit: { USD: '0.0000015100' },
+                },
+                'OFFERTERM.RATE.TIER2': {
+                  unit: 'Requests',
+                  beginRange: '333000000',
+                  pricePerUnit: { USD: '0.0000028000' },
+                },
+                'OFFERTERM.RATE.TIER1': {
+                  unit: 'Requests',
+                  beginRange: '0',
+                  pricePerUnit: { USD: '0.0000035000' },
+                },
+                'OFFERTERM.RATE.TIER3': {
+                  unit: 'Requests',
+                  beginRange: '1000000000',
+                  pricePerUnit: { USD: '0.0000023800' },
+                },
+              },
+            },
+          },
+        },
+      });
+      mockSend.mockResolvedValue({ PriceList: [item] });
+
+      const result = await fetchPrice(QUERY, REGION);
+
+      expect(result).not.toBeNull();
+      expect(result!.pricePerUnit).toBeCloseTo(0.0000035);
+      expect(result!.unit).toBe('Requests');
+      expect(result!.currency).toBe('USD');
+    });
+
+    it('falls back to first non-zero when no beginRange field is present', async () => {
+      // EC2-style response: single dimension with no beginRange.
+      const item = JSON.stringify({
+        terms: {
+          OnDemand: {
+            'OFFERTERM.RATE': {
+              priceDimensions: {
+                'OFFERTERM.RATE.DIM': {
+                  unit: 'Hrs',
+                  pricePerUnit: { USD: '0.0960' },
+                },
+              },
+            },
+          },
+        },
+      });
+      mockSend.mockResolvedValue({ PriceList: [item] });
+
+      const result = await fetchPrice(QUERY, REGION);
+
+      expect(result).not.toBeNull();
+      expect(result!.pricePerUnit).toBeCloseTo(0.096);
+      expect(result!.unit).toBe('Hrs');
+    });
+
     it('skips zero-price free-tier dimension and returns the non-zero paid-tier price', async () => {
       // DynamoDB-style response: first dimension is $0 free-tier, second is paid.
       const item = JSON.stringify({

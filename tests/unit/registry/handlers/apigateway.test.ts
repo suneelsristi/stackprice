@@ -105,11 +105,11 @@ describe('apigatewayHandler', () => {
       );
     });
 
-    it('sets group filter to "Amazon API Gateway - Requests"', () => {
+    it('sets productFamily filter to "API Calls"', () => {
       const attrs = apigatewayHandler.extractPricingAttributes(makeResource({}))!;
       const query = apigatewayHandler.buildPricingQuery(attrs, 'us-east-1');
       const fields = Object.fromEntries(query.filters.map((f) => [f.field, f.value]));
-      expect(fields['group']).toBe('Amazon API Gateway - Requests');
+      expect(fields['productFamily']).toBe('API Calls');
     });
 
     it('maps us-east-1 to US East (N. Virginia)', () => {
@@ -133,13 +133,14 @@ describe('apigatewayHandler', () => {
       expect(loc).toBe('xx-region-1');
     });
 
-    it('produces exactly two filters: group and location', () => {
+    it('produces exactly two filters: productFamily and location', () => {
       const attrs = apigatewayHandler.extractPricingAttributes(makeResource({}))!;
       const query = apigatewayHandler.buildPricingQuery(attrs, 'us-east-1');
       expect(query.filters).toHaveLength(2);
       const fieldNames = query.filters.map((f) => f.field);
-      expect(fieldNames).toContain('group');
+      expect(fieldNames).toContain('productFamily');
       expect(fieldNames).toContain('location');
+      expect(fieldNames).not.toContain('group');
     });
   });
 

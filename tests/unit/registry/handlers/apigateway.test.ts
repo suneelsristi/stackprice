@@ -93,6 +93,13 @@ describe('apigatewayHandler', () => {
       );
       expect(attrs!['endpointType']).toBe('EDGE');
     });
+
+    it('defaults to EDGE when EndpointConfiguration is an array', () => {
+      const attrs = apigatewayHandler.extractPricingAttributes(
+        makeResource({ EndpointConfiguration: ['REGIONAL'] }),
+      );
+      expect(attrs!['endpointType']).toBe('EDGE');
+    });
   });
 
   // ─── buildPricingQuery ──────────────────────────────────────────────────────
@@ -133,14 +140,46 @@ describe('apigatewayHandler', () => {
       expect(loc).toBe('xx-region-1');
     });
 
-    it('produces exactly two filters: productFamily and location', () => {
+    it('produces three filters for a known region: productFamily, location, usagetype', () => {
       const attrs = apigatewayHandler.extractPricingAttributes(makeResource({}))!;
       const query = apigatewayHandler.buildPricingQuery(attrs, 'us-east-1');
+      expect(query.filters).toHaveLength(3);
+      const fieldNames = query.filters.map((f) => f.field);
+      expect(fieldNames).toContain('productFamily');
+      expect(fieldNames).toContain('location');
+      expect(fieldNames).toContain('usagetype');
+      expect(fieldNames).not.toContain('group');
+    });
+
+    it('sets usagetype filter to USE1-ApiGatewayRequest for us-east-1', () => {
+      const attrs = apigatewayHandler.extractPricingAttributes(makeResource({}))!;
+      const query = apigatewayHandler.buildPricingQuery(attrs, 'us-east-1');
+      const usagetype = query.filters.find((f) => f.field === 'usagetype')?.value;
+      expect(usagetype).toBe('USE1-ApiGatewayRequest');
+    });
+
+    it('sets usagetype filter to EUC1-ApiGatewayRequest for eu-central-1', () => {
+      const attrs = apigatewayHandler.extractPricingAttributes(makeResource({}))!;
+      const query = apigatewayHandler.buildPricingQuery(attrs, 'eu-central-1');
+      const usagetype = query.filters.find((f) => f.field === 'usagetype')?.value;
+      expect(usagetype).toBe('EUC1-ApiGatewayRequest');
+    });
+
+    it('sets usagetype filter to EU-ApiGatewayRequest for eu-west-1', () => {
+      const attrs = apigatewayHandler.extractPricingAttributes(makeResource({}))!;
+      const query = apigatewayHandler.buildPricingQuery(attrs, 'eu-west-1');
+      const usagetype = query.filters.find((f) => f.field === 'usagetype')?.value;
+      expect(usagetype).toBe('EU-ApiGatewayRequest');
+    });
+
+    it('omits usagetype filter for unknown regions — graceful fallback', () => {
+      const attrs = apigatewayHandler.extractPricingAttributes(makeResource({}))!;
+      const query = apigatewayHandler.buildPricingQuery(attrs, 'xx-region-1');
       expect(query.filters).toHaveLength(2);
       const fieldNames = query.filters.map((f) => f.field);
       expect(fieldNames).toContain('productFamily');
       expect(fieldNames).toContain('location');
-      expect(fieldNames).not.toContain('group');
+      expect(fieldNames).not.toContain('usagetype');
     });
   });
 

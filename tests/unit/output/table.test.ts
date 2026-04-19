@@ -166,7 +166,9 @@ describe('formatTable', () => {
         stackMonthlyCost: 172.65 + 4.17,
       });
       const result = formatTable([stack], true);
-      expect(result).toContain('ApiHandler5E7490E8');
+      // CDK hash suffix "5E7490E8" is stripped — displays as "ApiHandler"
+      expect(result).toContain('ApiHandler');
+      expect(result).not.toContain('ApiHandler5E7490E8');
       expect(result).toContain('Estimated (usage-based with provided estimates)');
       expect(result).toContain('~$4.17');
       expect(result).toContain('5M req × 200ms × 256MB');
@@ -249,6 +251,104 @@ describe('formatTable', () => {
       const stack = makeStack({ unsupportedTypes: ['AWS::CloudFront::Distribution'] });
       const result = formatTable([stack], true);
       expect(result).toContain('AWS::CloudFront::Distribution');
+    });
+  });
+
+  describe('CDK hash stripping', () => {
+    it('strips 8-char uppercase hex suffix from logicalId (fixed table)', () => {
+      const stack = makeStack({
+        pricedResources: [
+          { logicalId: 'WebServer99EDD300', type: 'AWS::EC2::Instance', monthlyCost: 50.00, currency: 'USD', basis: 'Hrs' },
+        ],
+        stackMonthlyCost: 50.00,
+      });
+      const result = formatTable([stack], true);
+      expect(result).toContain('WebServer');
+      expect(result).not.toContain('WebServer99EDD300');
+    });
+
+    it('does not strip logicalId with no CDK hash suffix', () => {
+      const stack = makeStack({
+        pricedResources: [
+          { logicalId: 'RedisCluster', type: 'AWS::ElastiCache::ReplicationGroup', monthlyCost: 30.00, currency: 'USD', basis: 'Hrs' },
+        ],
+        stackMonthlyCost: 30.00,
+      });
+      const result = formatTable([stack], true);
+      expect(result).toContain('RedisCluster');
+    });
+
+    it('does not strip logicalId where first half of suffix has no hex letters (not a CDK hash)', () => {
+      // "49610EDF": first 4 chars "4961" have no A-F letters → keep as-is
+      const stack = makeStack({
+        pricedResources: [
+          { logicalId: 'MyApi49610EDF', type: 'AWS::ApiGateway::RestApi', monthlyCost: 10.00, currency: 'USD', basis: 'Hrs' },
+        ],
+        stackMonthlyCost: 10.00,
+      });
+      const result = formatTable([stack], true);
+      expect(result).toContain('MyApi49610EDF');
+    });
+
+    it('strips CDK hash suffix in usage-based table', () => {
+      const stack = makeStack({
+        pricedResources: [],
+        stackMonthlyCost: 0,
+        usageBasedResources: [
+          { logicalId: 'DatabaseB269D8BB', type: 'AWS::DynamoDB::Table', unitPrice: 0.00065, unit: 'RCU', currency: 'USD' },
+        ],
+      });
+      const result = formatTable([stack], true);
+      expect(result).toContain('Database');
+      expect(result).not.toContain('DatabaseB269D8BB');
+    });
+
+    it('strips CDK hash suffix in conditional table', () => {
+      const stack = makeStack({
+        conditionalResources: [
+          { logicalId: 'ProdOnlyBucketCA72566A', type: 'AWS::S3::Bucket', conditionName: 'IsProd', monthlyCost: null, currency: 'USD' },
+        ],
+      });
+      const result = formatTable([stack], true);
+      expect(result).toContain('ProdOnlyBucket');
+      expect(result).not.toContain('ProdOnlyBucketCA72566A');
+    });
+  });
+
+  describe('usage-based sort', () => {
+    it('sorts usage-based resources by unitPrice descending', () => {
+      const stack = makeStack({
+        pricedResources: [],
+        stackMonthlyCost: 0,
+        usageBasedResources: [
+          { logicalId: 'CheapResource', type: 'AWS::SQS::Queue', unitPrice: 0.0000004, unit: 'Requests', currency: 'USD' },
+          { logicalId: 'ExpensiveResource', type: 'AWS::SNS::Topic', unitPrice: 0.00005, unit: 'Requests', currency: 'USD' },
+          { logicalId: 'MidResource', type: 'AWS::Lambda::Function', unitPrice: 0.000002, unit: 'Requests', currency: 'USD' },
+        ],
+      });
+      const result = formatTable([stack], true);
+      const expensivePos = result.indexOf('ExpensiveResource');
+      const midPos = result.indexOf('MidResource');
+      const cheapPos = result.indexOf('CheapResource');
+      // Highest unit price first
+      expect(expensivePos).toBeLessThan(midPos);
+      expect(midPos).toBeLessThan(cheapPos);
+    });
+  });
+
+  describe('total line color', () => {
+    it('total line has no ANSI codes when noColor=true', () => {
+      const result = formatTable([makeStack()], true);
+      const totalLine = result.split('\n').find((l) => l.includes('TOTAL ESTIMATED MONTHLY COST'));
+      expect(totalLine).toBeDefined();
+      expect(totalLine).not.toMatch(/\x1b\[/);
+    });
+
+    it('total line has ANSI codes (bold green) when noColor=false', () => {
+      const result = formatTable([makeStack()], false);
+      const totalLine = result.split('\n').find((l) => l.replace(/\x1b\[[0-9;]*m/g, '').includes('TOTAL ESTIMATED MONTHLY COST'));
+      expect(totalLine).toBeDefined();
+      expect(totalLine).toMatch(/\x1b\[/);
     });
   });
 

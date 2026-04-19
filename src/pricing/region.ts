@@ -2,6 +2,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
+import chalk from 'chalk';
+
 import type { RegionSource } from '../template/types.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -133,8 +135,10 @@ export function resolveRegion(
 
   // Step 6: Default fallback — warn to stderr (Security Rule 7: warnings → stderr).
   process.stderr.write(
-    `⚠ Region not determined. Defaulting to ${DEFAULT_REGION}.\n` +
-      `  Use --region to specify a region explicitly.\n`,
+    chalk.yellow(
+      `⚠ Region not determined. Defaulting to ${DEFAULT_REGION}.\n` +
+        `  Use --region to specify a region explicitly.\n`,
+    ),
   );
 
   return { region: DEFAULT_REGION, source: 'default-fallback' };

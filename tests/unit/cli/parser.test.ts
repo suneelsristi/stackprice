@@ -230,23 +230,39 @@ describe('createProgram — breakdown command', () => {
     const program = createProgram();
     await program.parseAsync(['node', 'stackprice', 'breakdown', '--dir', '/fake/cdk.out']);
 
-    expect(mockStderr).toHaveBeenCalledWith('Error: No credentials found\n');
+    expect(mockStderr).toHaveBeenCalledWith(expect.stringContaining('No credentials found'));
     expect(mockExit).toHaveBeenCalledWith(EXIT_CODES.FAILURE);
   });
 
-  it('unknown error caught without --verbose → hint included in message', async () => {
+  it('StackPriceError caught with --no-color → plain text (no ANSI codes)', async () => {
+    const { StackPriceError, EXIT_CODES } = await import('../../../src/errors/index.js');
+
+    mockCheckCredentials.mockRejectedValue(
+      new StackPriceError('No credentials found', EXIT_CODES.FAILURE),
+    );
+
+    const program = createProgram();
+    await program.parseAsync(['node', 'stackprice', 'breakdown', '--dir', '/fake/cdk.out', '--no-color']);
+
+    const stderrCalls = mockStderr.mock.calls.map((c: unknown[]) => String(c[0]));
+    const errorLine = stderrCalls.find((s: string) => s.includes('No credentials found'));
+    expect(errorLine).toBeDefined();
+    // With noColor, no ANSI escape codes
+    expect(errorLine).not.toMatch(/\x1b\[/);
+  });
+
+  it('unknown error caught without --verbose → two writes: colored message + plain hint', async () => {
     mockCheckCredentials.mockRejectedValue(new Error('unexpected failure'));
 
     const program = createProgram();
     await program.parseAsync(['node', 'stackprice', 'breakdown', '--dir', '/fake/cdk.out']);
 
-    expect(mockStderr).toHaveBeenCalledWith(
-      'An unexpected error occurred. Use --verbose for details.\n',
-    );
+    expect(mockStderr).toHaveBeenCalledWith(expect.stringContaining('An unexpected error occurred'));
+    expect(mockStderr).toHaveBeenCalledWith('Use --verbose for details.\n');
     expect(mockExit).toHaveBeenCalledWith(2);
   });
 
-  it('unknown error caught with --verbose → no hint, stack trace printed', async () => {
+  it('unknown error caught with --verbose → message includes error text, stack trace printed', async () => {
     const err = new Error('unexpected failure');
     mockCheckCredentials.mockRejectedValue(err);
 
@@ -257,7 +273,8 @@ describe('createProgram — breakdown command', () => {
       '--verbose',
     ]);
 
-    expect(mockStderr).toHaveBeenCalledWith('An unexpected error occurred.\n');
+    expect(mockStderr).toHaveBeenCalledWith(expect.stringContaining('An unexpected error occurred'));
+    expect(mockStderr).toHaveBeenCalledWith(expect.stringContaining('unexpected failure'));
     expect(mockStderr).toHaveBeenCalledWith(expect.stringContaining('Error: unexpected failure'));
     expect(mockStderr).not.toHaveBeenCalledWith(
       expect.stringContaining('Use --verbose'),
@@ -621,7 +638,7 @@ describe('createProgram — diff command', () => {
     const program = createProgram();
     await program.parseAsync(['node', 'stackprice', 'diff', '/fake/before.json', '/fake/after.json']);
 
-    expect(mockStderr).toHaveBeenCalledWith('An unexpected error occurred.\n');
+    expect(mockStderr).toHaveBeenCalledWith(expect.stringContaining('An unexpected error occurred'));
     expect(mockStderr).not.toHaveBeenCalledWith(
       expect.stringContaining('Use --verbose'),
     );

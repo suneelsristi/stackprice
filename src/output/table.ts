@@ -20,6 +20,19 @@ function header(label: string, noColor: boolean): string {
   return noColor ? label : chalk.bold(label);
 }
 
+/**
+ * Strips the 8-character CDK hash suffix from a logical ID for display.
+ * CDK auto-generates suffixes like "99EDD300" (all [0-9A-F], first 4 contain
+ * at least one letter A-F). The full logicalId is preserved in JSON output.
+ */
+function stripCdkHash(logicalId: string): string {
+  if (logicalId.length <= 8) return logicalId;
+  const suffix = logicalId.slice(-8);
+  if (!/^[0-9A-F]{8}$/.test(suffix)) return logicalId;
+  if (!/[A-F]/.test(suffix.slice(0, 4))) return logicalId;
+  return logicalId.slice(0, -8);
+}
+
 function buildFixedTable(stack: PricedStack, noColor: boolean): string {
   const sorted = [...stack.pricedResources].sort((a, b) => b.monthlyCost - a.monthlyCost);
 
@@ -30,7 +43,7 @@ function buildFixedTable(stack: PricedStack, noColor: boolean): string {
   });
 
   for (const r of sorted) {
-    table.push([r.logicalId, r.type, formatCost(r.monthlyCost)]);
+    table.push([stripCdkHash(r.logicalId), r.type, formatCost(r.monthlyCost)]);
   }
 
   const subtotalLabel = noColor ? 'Stack Subtotal' : chalk.bold('Stack Subtotal');
@@ -46,8 +59,9 @@ function buildUsageTable(stack: PricedStack, noColor: boolean): string {
     style: { head: headStyle },
   });
 
-  for (const r of stack.usageBasedResources) {
-    table.push([r.logicalId, r.type, `${formatUnitPrice(r.unitPrice)}/unit`, 'Usage-based — provide estimate via --usage-file']);
+  const sorted = [...stack.usageBasedResources].sort((a, b) => b.unitPrice - a.unitPrice);
+  for (const r of sorted) {
+    table.push([stripCdkHash(r.logicalId), r.type, `${formatUnitPrice(r.unitPrice)}/unit`, 'Usage-based — provide estimate via --usage-file']);
   }
 
   return table.toString();
@@ -61,7 +75,7 @@ function buildEstimatedTable(stack: PricedStack, noColor: boolean): string {
   });
 
   for (const r of stack.estimatedResources) {
-    table.push([r.logicalId, r.type, `~${formatCost(r.estimatedMonthlyCost)}`, r.basis]);
+    table.push([stripCdkHash(r.logicalId), r.type, `~${formatCost(r.estimatedMonthlyCost)}`, r.basis]);
   }
 
   return table.toString();
@@ -76,7 +90,7 @@ function buildConditionalTable(stack: PricedStack, noColor: boolean): string {
 
   for (const r of stack.conditionalResources) {
     const costStr = r.monthlyCost !== null ? formatCost(r.monthlyCost) : 'Usage-based';
-    table.push([r.logicalId, r.type, r.conditionName, costStr]);
+    table.push([stripCdkHash(r.logicalId), r.type, r.conditionName, costStr]);
   }
 
   return table.toString();
@@ -140,7 +154,7 @@ export function formatTable(stacks: PricedStack[], noColor: boolean): string {
   }
   const totalLine = noColor
     ? `TOTAL ESTIMATED MONTHLY COST: ${totalStr}`
-    : chalk.bold(`TOTAL ESTIMATED MONTHLY COST: ${totalStr}`);
+    : chalk.bold.green(`TOTAL ESTIMATED MONTHLY COST: ${totalStr}`);
 
   lines.push(totalLine);
 

@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { Command } from 'commander';
+import chalk from 'chalk';
 
 import { checkCredentials } from '../pricing/credentials.js';
 import { readAssembly } from '../assembly/reader.js';
@@ -128,6 +129,8 @@ export function createProgram(): Command {
       const noCache = !options.cache;
       const output = options.output as 'table' | 'json' | 'summary';
 
+      chalk.level = noColor ? 0 : 3;
+
       try {
         // ── 2. Check credentials ─────────────────────────────────────────────
         await checkCredentials();
@@ -184,16 +187,21 @@ export function createProgram(): Command {
         }
       } catch (err: unknown) {
         if (err instanceof StackPriceError) {
-          process.stderr.write(`Error: ${err.message}\n`);
+          process.stderr.write(chalk.red(`✗ ${err.message}\n`));
           if (options.verbose && err.stack) {
             process.stderr.write(`${err.stack}\n`);
           }
           process.exit(err.exitCode);
         } else {
-          const hint = options.verbose ? '' : ' Use --verbose for details.';
-          process.stderr.write(`An unexpected error occurred.${hint}\n`);
-          if (options.verbose && err instanceof Error && err.stack) {
-            process.stderr.write(`${err.stack}\n`);
+          if (options.verbose) {
+            const msg = err instanceof Error ? err.message : String(err);
+            process.stderr.write(chalk.red(`An unexpected error occurred: ${msg}\n`));
+            if (err instanceof Error && err.stack) {
+              process.stderr.write(`${err.stack}\n`);
+            }
+          } else {
+            process.stderr.write(chalk.red(`An unexpected error occurred.\n`));
+            process.stderr.write(`Use --verbose for details.\n`);
           }
           process.exit(2);
         }
@@ -212,6 +220,8 @@ export function createProgram(): Command {
     .option('--out-file <path>', 'Write output to file instead of stdout (optional)')
     .action((beforeArg: string, afterArg: string, options: DiffOptions) => {
       const noColor = !options.color;
+
+      chalk.level = noColor ? 0 : 3;
 
       try {
         // ── 1. Validate paths (Security Rule 1 — path validation) ────────────
@@ -284,10 +294,10 @@ export function createProgram(): Command {
         }
       } catch (err: unknown) {
         if (err instanceof StackPriceError) {
-          process.stderr.write(`Error: ${err.message}\n`);
+          process.stderr.write(chalk.red(`✗ ${err.message}\n`));
           process.exit(err.exitCode);
         } else {
-          process.stderr.write(`An unexpected error occurred.\n`);
+          process.stderr.write(chalk.red(`An unexpected error occurred.\n`));
           process.exit(2);
         }
       }

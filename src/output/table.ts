@@ -53,6 +53,20 @@ function buildUsageTable(stack: PricedStack, noColor: boolean): string {
   return table.toString();
 }
 
+function buildEstimatedTable(stack: PricedStack, noColor: boolean): string {
+  const headStyle = noColor ? [] : ['cyan'];
+  const table = new Table({
+    head: ['Resource ID', 'Type', 'Monthly Cost', 'Basis'],
+    style: { head: headStyle },
+  });
+
+  for (const r of stack.estimatedResources) {
+    table.push([r.logicalId, r.type, `~${formatCost(r.estimatedMonthlyCost)}`, r.basis]);
+  }
+
+  return table.toString();
+}
+
 function buildConditionalTable(stack: PricedStack, noColor: boolean): string {
   const headStyle = noColor ? [] : ['cyan'];
   const table = new Table({
@@ -77,6 +91,7 @@ export function formatTable(stacks: PricedStack[], noColor: boolean): string {
 
   const totalMonthlyCost = stacks.reduce((sum, s) => sum + s.stackMonthlyCost, 0);
   const hasUsageBased = stacks.some((s) => s.usageBasedResources.length > 0);
+  const hasEstimated = stacks.some((s) => s.estimatedResources.length > 0);
 
   const lines: string[] = [];
 
@@ -86,6 +101,12 @@ export function formatTable(stacks: PricedStack[], noColor: boolean): string {
 
     if (stack.pricedResources.length > 0) {
       lines.push(buildFixedTable(stack, noColor));
+    }
+
+    if (stack.estimatedResources.length > 0) {
+      lines.push(header('Estimated (usage-based with provided estimates)', noColor));
+      lines.push(buildEstimatedTable(stack, noColor));
+      lines.push('~ Estimated using Tier 1 pricing. Actual costs may be lower at high volume.');
     }
 
     if (stack.usageBasedResources.length > 0) {
@@ -104,7 +125,19 @@ export function formatTable(stacks: PricedStack[], noColor: boolean): string {
     lines.push('');
   }
 
-  const totalStr = formatCost(totalMonthlyCost) + (hasUsageBased ? ' + usage-based' : '');
+  const totalEstimated = stacks.reduce(
+    (sum, s) => sum + s.estimatedResources.reduce((s2, r) => s2 + r.estimatedMonthlyCost, 0),
+    0,
+  );
+  const fixedCost = totalMonthlyCost - totalEstimated;
+  let totalStr: string;
+  if (hasEstimated && hasUsageBased) {
+    totalStr = `${formatCost(fixedCost)} + ~${formatCost(totalEstimated)} estimated + usage-based`;
+  } else if (hasEstimated) {
+    totalStr = `${formatCost(fixedCost)} + ~${formatCost(totalEstimated)} estimated`;
+  } else {
+    totalStr = formatCost(totalMonthlyCost) + (hasUsageBased ? ' + usage-based' : '');
+  }
   const totalLine = noColor
     ? `TOTAL ESTIMATED MONTHLY COST: ${totalStr}`
     : chalk.bold(`TOTAL ESTIMATED MONTHLY COST: ${totalStr}`);

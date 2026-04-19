@@ -25,6 +25,13 @@ vi.mock('../../../src/pricing/client.js', () => ({
   fetchPrice: (...args: unknown[]): unknown => mockFetchPrice(...args),
 }));
 
+const mockCalculateEstimatedCost = vi.fn();
+
+vi.mock('../../../src/pricing/usage-calculator.js', () => ({
+  calculateEstimatedCost: (...args: unknown[]): unknown => mockCalculateEstimatedCost(...args),
+  parseUsageFile: vi.fn(),
+}));
+
 import { priceStacks } from '../../../src/pricing/engine.js';
 import { ResourceHandlerRegistry } from '../../../src/registry/index.js';
 
@@ -106,6 +113,8 @@ beforeEach(() => {
   mockBuildCacheKey.mockReturnValue('us-east-1:AmazonEC2:instanceType=m5.large');
   mockGetFromMemory.mockReturnValue(null);
   mockGetFromFile.mockReturnValue(null);
+  // Default: calculateEstimatedCost returns null (no estimate)
+  mockCalculateEstimatedCost.mockReturnValue(null);
 });
 
 describe('priceStacks', () => {
@@ -592,6 +601,112 @@ describe('priceStacks', () => {
 
       expect(result!.conditionalResources).toHaveLength(1);
       expect(result!.conditionalResources[0]!.monthlyCost).toBeCloseTo(0.04048 * 730 * 0.25, 4);
+    });
+  });
+
+  describe('usageFile parameter', () => {
+    it('usageFile undefined: estimatedResources is empty array', async () => {
+      const apiResult = makeApiResult(0.0000002, 'Requests');
+      mockBuildCacheKey.mockReturnValue('us-east-1:AWSLambda:location=us-east-1');
+      mockFetchPrice.mockResolvedValue(apiResult);
+
+      const handler = makeUsageHandler();
+      const stack = makeStack([makeResource('MyLambda', 'AWS::Lambda::Function')]);
+      const registry = makeRegistry(handler);
+
+      const [result] = await priceStacks([stack], registry, false);
+
+      expect(result!.estimatedResources).toHaveLength(0);
+      expect(result!.usageBasedResources).toHaveLength(1);
+      expect(mockCalculateEstimatedCost).not.toHaveBeenCalled();
+    });
+
+    it('usageFile provided: resource in file and calculateEstimatedCost returns non-null moves to estimatedResources', async () => {
+      const apiResult = makeApiResult(0.0000166667, 'GB-second');
+      mockBuildCacheKey.mockReturnValue('us-east-1:AWSLambda:location=us-east-1');
+      mockFetchPrice.mockResolvedValue(apiResult);
+
+      const estimatedResult = {
+        logicalId: 'MyLambda',
+        type: 'AWS::Lambda::Function',
+        estimatedMonthlyCost: 4.17,
+        currency: 'USD' as const,
+        basis: '5M req × 200ms × 256MB',
+        unitPrice: 0.0000166667,
+        unit: 'GB-second',
+      };
+      mockCalculateEstimatedCost.mockReturnValue(estimatedResult);
+
+      const handler = makeUsageHandler();
+      const stack = makeStack([makeResource('MyLambda', 'AWS::Lambda::Function')]);
+      const registry = makeRegistry(handler);
+
+      const usageFile = { MyLambda: { requests_per_month: 5000000, avg_duration_ms: 200, memory_mb: 256 } };
+      const [result] = await priceStacks([stack], registry, false, usageFile);
+
+      expect(result!.estimatedResources).toHaveLength(1);
+      expect(result!.estimatedResources[0]).toMatchObject(estimatedResult);
+      expect(result!.usageBasedResources).toHaveLength(0);
+    });
+
+    it('usageFile provided: estimated cost included in stackMonthlyCost', async () => {
+      const apiResult = makeApiResult(0.0000166667, 'GB-second');
+      mockBuildCacheKey.mockReturnValue('us-east-1:AWSLambda:location=us-east-1');
+      mockFetchPrice.mockResolvedValue(apiResult);
+
+      mockCalculateEstimatedCost.mockReturnValue({
+        logicalId: 'MyLambda',
+        type: 'AWS::Lambda::Function',
+        estimatedMonthlyCost: 4.17,
+        currency: 'USD' as const,
+        basis: '5M req × 200ms × 256MB',
+        unitPrice: 0.0000166667,
+        unit: 'GB-second',
+      });
+
+      const handler = makeUsageHandler();
+      const stack = makeStack([makeResource('MyLambda', 'AWS::Lambda::Function')]);
+      const registry = makeRegistry(handler);
+
+      const usageFile = { MyLambda: { requests_per_month: 5000000, avg_duration_ms: 200, memory_mb: 256 } };
+      const [result] = await priceStacks([stack], registry, false, usageFile);
+
+      expect(result!.stackMonthlyCost).toBeCloseTo(4.17);
+    });
+
+    it('usageFile provided: resource not in file stays in usageBasedResources', async () => {
+      const apiResult = makeApiResult(0.0000166667, 'GB-second');
+      mockBuildCacheKey.mockReturnValue('us-east-1:AWSLambda:location=us-east-1');
+      mockFetchPrice.mockResolvedValue(apiResult);
+
+      const handler = makeUsageHandler();
+      const stack = makeStack([makeResource('MyLambda', 'AWS::Lambda::Function')]);
+      const registry = makeRegistry(handler);
+
+      const usageFile = { OtherResource: { requests_per_month: 1000000 } };
+      const [result] = await priceStacks([stack], registry, false, usageFile);
+
+      expect(result!.usageBasedResources).toHaveLength(1);
+      expect(result!.estimatedResources).toHaveLength(0);
+      expect(mockCalculateEstimatedCost).not.toHaveBeenCalled();
+    });
+
+    it('usageFile provided: resource in file but calculateEstimatedCost returns null stays in usageBasedResources', async () => {
+      const apiResult = makeApiResult(0.0000166667, 'GB-second');
+      mockBuildCacheKey.mockReturnValue('us-east-1:AWSLambda:location=us-east-1');
+      mockFetchPrice.mockResolvedValue(apiResult);
+
+      mockCalculateEstimatedCost.mockReturnValue(null);
+
+      const handler = makeUsageHandler();
+      const stack = makeStack([makeResource('MyLambda', 'AWS::Lambda::Function')]);
+      const registry = makeRegistry(handler);
+
+      const usageFile = { MyLambda: { requests_per_month: 5000000 } };
+      const [result] = await priceStacks([stack], registry, false, usageFile);
+
+      expect(result!.usageBasedResources).toHaveLength(1);
+      expect(result!.estimatedResources).toHaveLength(0);
     });
   });
 

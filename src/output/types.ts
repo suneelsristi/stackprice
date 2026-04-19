@@ -8,12 +8,23 @@ export interface BreakdownResult {
   summary: BreakdownSummary;
 }
 
+export interface EstimatedResult {
+  logicalId: string;
+  type: string;
+  estimatedMonthlyCost: number;
+  currency: 'USD';
+  basis: string;
+  unitPrice: number;
+  unit: string;
+}
+
 export interface PricedStackResult {
   stackId: string;
   region: string;
   regionSource: string;
   resources: ResourceResult[];
   usageBasedResources: UsageBasedResult[];
+  estimatedResources: EstimatedResult[];
   conditionalResources: ConditionalResult[];
   unsupportedTypes: string[];
   stackMonthlyCost: number;

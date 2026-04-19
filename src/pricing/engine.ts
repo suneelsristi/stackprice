@@ -4,14 +4,17 @@ import type {
   PricedStack,
   PricedResource,
   UsageBasedResource,
+  EstimatedResource,
   PricedConditionalResource,
   PricingApiResult,
   PricingQuery,
+  UsageFile,
 } from './types.js';
 import { buildCacheKey, getFromMemory, getFromFile, setInMemory, setInFile } from './cache.js';
 import { fetchPrice } from './client.js';
 import type { ResourceHandler, PricingAttributes } from '../registry/handler.js';
 import type { ResourceRecord } from '../template/types.js';
+import { calculateEstimatedCost } from './usage-calculator.js';
 
 // ─── Internal work item ───────────────────────────────────────────────────────
 
@@ -71,12 +74,14 @@ export async function priceStacks(
   stacks: ParsedStack[],
   registry: ResourceHandlerRegistry,
   noCache: boolean,
+  usageFile?: UsageFile,
 ): Promise<PricedStack[]> {
   const output: PricedStack[] = [];
 
   for (const stack of stacks) {
     const pricedResources: PricedResource[] = [];
     const usageBasedResources: UsageBasedResource[] = [];
+    const estimatedResources: EstimatedResource[] = [];
     const conditionalResources: PricedConditionalResource[] = [];
     const unsupportedTypes: string[] = [];
 
@@ -181,13 +186,25 @@ export async function priceStacks(
 
         conditionalResources.push(condOut);
       } else if (handler.isUsageBased) {
-        usageBasedResources.push({
+        const usageBasedResource: UsageBasedResource = {
           logicalId: resource.logicalId,
           type: resource.type,
           unitPrice: result.pricePerUnit,
           unit: result.unit,
           currency: 'USD',
-        });
+        };
+
+        const usageEntry = usageFile?.[resource.logicalId];
+        if (usageEntry !== undefined) {
+          const estimated = calculateEstimatedCost(usageBasedResource, usageEntry);
+          if (estimated !== null) {
+            estimatedResources.push(estimated);
+          } else {
+            usageBasedResources.push(usageBasedResource);
+          }
+        } else {
+          usageBasedResources.push(usageBasedResource);
+        }
       } else {
         const monthlyPrice = handler.calculateMonthlyCost(result);
         if (monthlyPrice !== null) {
@@ -202,7 +219,9 @@ export async function priceStacks(
       }
     }
 
-    const stackMonthlyCost = pricedResources.reduce((sum, r) => sum + r.monthlyCost, 0);
+    const stackMonthlyCost =
+      pricedResources.reduce((sum, r) => sum + r.monthlyCost, 0) +
+      estimatedResources.reduce((sum, r) => sum + r.estimatedMonthlyCost, 0);
 
     output.push({
       stackId: stack.stackId,
@@ -210,6 +229,7 @@ export async function priceStacks(
       regionSource: stack.regionSource,
       pricedResources,
       usageBasedResources,
+      estimatedResources,
       conditionalResources,
       unsupportedTypes,
       stackMonthlyCost,

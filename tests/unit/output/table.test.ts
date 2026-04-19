@@ -26,6 +26,7 @@ function makeStack(overrides: Partial<PricedStack> = {}): PricedStack {
       },
     ],
     usageBasedResources: [],
+    estimatedResources: [],
     conditionalResources: [],
     unsupportedTypes: [],
     stackMonthlyCost: 172.65,
@@ -145,6 +146,87 @@ describe('formatTable', () => {
       expect(result).toContain('ConditionalLambda');
       expect(result).toContain('IsEnabled');
       expect(result).toContain('Usage-based');
+    });
+  });
+
+  describe('estimated resources', () => {
+    it('shows estimated table section when estimatedResources is non-empty', () => {
+      const stack = makeStack({
+        estimatedResources: [
+          {
+            logicalId: 'ApiHandler5E7490E8',
+            type: 'AWS::Lambda::Function',
+            estimatedMonthlyCost: 4.17,
+            currency: 'USD',
+            basis: '5M req × 200ms × 256MB',
+            unitPrice: 0.0000166667,
+            unit: 'GB-second',
+          },
+        ],
+        stackMonthlyCost: 172.65 + 4.17,
+      });
+      const result = formatTable([stack], true);
+      expect(result).toContain('ApiHandler5E7490E8');
+      expect(result).toContain('Estimated (usage-based with provided estimates)');
+      expect(result).toContain('~$4.17');
+      expect(result).toContain('5M req × 200ms × 256MB');
+      expect(result).toContain('~ Estimated using Tier 1 pricing');
+    });
+
+    it('does not show estimated table section when estimatedResources is empty', () => {
+      const result = formatTable([makeStack()], true);
+      expect(result).not.toContain('Estimated (usage-based with provided estimates)');
+      expect(result).not.toContain('~ Estimated using Tier 1 pricing');
+    });
+
+    it('shows fixed + estimated total when only estimated (no remaining usage-based)', () => {
+      const stack = makeStack({
+        pricedResources: [
+          { logicalId: 'Ec2Instance', type: 'AWS::EC2::Instance', monthlyCost: 70.08, currency: 'USD', basis: 'Hrs' },
+        ],
+        estimatedResources: [
+          {
+            logicalId: 'MyLambda',
+            type: 'AWS::Lambda::Function',
+            estimatedMonthlyCost: 4.17,
+            currency: 'USD',
+            basis: '5M req × 200ms × 256MB',
+            unitPrice: 0.0000166667,
+            unit: 'GB-second',
+          },
+        ],
+        usageBasedResources: [],
+        stackMonthlyCost: 74.25,
+      });
+      const result = formatTable([stack], true);
+      expect(result).toContain('+ ~$4.17 estimated');
+      expect(result).not.toContain('+ usage-based');
+    });
+
+    it('shows fixed + estimated + usage-based total when both estimated and usage-based exist', () => {
+      const stack = makeStack({
+        pricedResources: [
+          { logicalId: 'Ec2Instance', type: 'AWS::EC2::Instance', monthlyCost: 70.08, currency: 'USD', basis: 'Hrs' },
+        ],
+        estimatedResources: [
+          {
+            logicalId: 'MyLambda',
+            type: 'AWS::Lambda::Function',
+            estimatedMonthlyCost: 4.17,
+            currency: 'USD',
+            basis: '5M req × 200ms × 256MB',
+            unitPrice: 0.0000166667,
+            unit: 'GB-second',
+          },
+        ],
+        usageBasedResources: [
+          { logicalId: 'MyBucket', type: 'AWS::S3::Bucket', unitPrice: 0.023, unit: 'GB-Mo', currency: 'USD' },
+        ],
+        stackMonthlyCost: 74.25,
+      });
+      const result = formatTable([stack], true);
+      expect(result).toContain('estimated');
+      expect(result).toContain('usage-based');
     });
   });
 

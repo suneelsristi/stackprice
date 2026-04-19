@@ -54,6 +54,7 @@ function makeStack(overrides: Partial<PricedStackResult> = {}): PricedStackResul
     regionSource: 'template',
     resources: [makeResource()],
     usageBasedResources: [],
+    estimatedResources: [],
     conditionalResources: [],
     unsupportedTypes: [],
     stackMonthlyCost: 70.08,

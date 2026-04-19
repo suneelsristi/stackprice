@@ -1,0 +1,296 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { UsageBasedResource } from '../../../src/pricing/types.js';
+import { StackPriceError } from '../../../src/errors/index.js';
+
+// ─── fs mock ─────────────────────────────────────────────────────────────────
+
+const mockExistsSync = vi.fn();
+const mockReadFileSync = vi.fn();
+
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return {
+    ...actual,
+    existsSync: (...args: unknown[]): unknown => mockExistsSync(...args),
+    readFileSync: (...args: unknown[]): unknown => mockReadFileSync(...args),
+  };
+});
+
+// ─── js-yaml mock ─────────────────────────────────────────────────────────────
+
+const mockYamlLoad = vi.fn();
+
+vi.mock('js-yaml', () => ({
+  load: (...args: unknown[]): unknown => mockYamlLoad(...args),
+}));
+
+import { parseUsageFile, calculateEstimatedCost } from '../../../src/pricing/usage-calculator.js';
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function makeUsageBasedResource(overrides: Partial<UsageBasedResource> = {}): UsageBasedResource {
+  return {
+    logicalId: 'MyResource',
+    type: 'AWS::Lambda::Function',
+    unitPrice: 0.0000166667,
+    unit: 'GB-second',
+    currency: 'USD',
+    ...overrides,
+  };
+}
+
+// ─── Tests ────────────────────────────────────────────────────────────────────
+
+describe('parseUsageFile', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('returns correct UsageFile for valid YAML', () => {
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue('yaml content');
+    mockYamlLoad.mockReturnValue({
+      MyLambda: { requests_per_month: 5000000, avg_duration_ms: 200, memory_mb: 256 },
+      MyBucket: { storage_gb: 500 },
+    });
+
+    const result = parseUsageFile('/some/usage.yml');
+    expect(result).toEqual({
+      MyLambda: { requests_per_month: 5000000, avg_duration_ms: 200, memory_mb: 256 },
+      MyBucket: { storage_gb: 500 },
+    });
+  });
+
+  it('returns empty object for null/empty YAML', () => {
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue('');
+    mockYamlLoad.mockReturnValue(null);
+
+    const result = parseUsageFile('/some/usage.yml');
+    expect(result).toEqual({});
+  });
+
+  it('silently ignores entries with non-number usage values', () => {
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue('yaml content');
+    mockYamlLoad.mockReturnValue({
+      MyLambda: { requests_per_month: '5000000' },  // string, not number
+      MyBucket: { storage_gb: 500 },
+    });
+
+    const result = parseUsageFile('/some/usage.yml');
+    expect(result).toEqual({
+      MyLambda: {},
+      MyBucket: { storage_gb: 500 },
+    });
+  });
+
+  it('throws StackPriceError when file not found', () => {
+    mockExistsSync.mockReturnValue(false);
+
+    expect(() => parseUsageFile('/missing/usage.yml')).toThrow(StackPriceError);
+    expect(() => parseUsageFile('/missing/usage.yml')).toThrow('Usage file not found');
+  });
+
+  it('throws StackPriceError when readFileSync throws', () => {
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockImplementation(() => {
+      throw new Error('permission denied');
+    });
+
+    expect(() => parseUsageFile('/some/usage.yml')).toThrow(StackPriceError);
+    expect(() => parseUsageFile('/some/usage.yml')).toThrow('Failed to read usage file');
+  });
+
+  it('throws StackPriceError for invalid YAML', () => {
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue('invalid: yaml: content:');
+    mockYamlLoad.mockImplementation(() => {
+      throw new Error('bad yaml');
+    });
+
+    expect(() => parseUsageFile('/some/usage.yml')).toThrow(StackPriceError);
+    expect(() => parseUsageFile('/some/usage.yml')).toThrow('Invalid YAML');
+  });
+
+  it('throws StackPriceError when YAML is an array (not a mapping)', () => {
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue('- item');
+    mockYamlLoad.mockReturnValue(['item']);
+
+    expect(() => parseUsageFile('/some/usage.yml')).toThrow(StackPriceError);
+  });
+
+  it('silently skips entries where value is a primitive (string)', () => {
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue('yaml content');
+    mockYamlLoad.mockReturnValue({
+      MyLambda: 'not-an-object',   // string, should be omitted entirely
+      MyBucket: { storage_gb: 500 },
+    });
+
+    const result = parseUsageFile('/some/usage.yml');
+    expect(result).toEqual({ MyBucket: { storage_gb: 500 } });
+    expect('MyLambda' in result).toBe(false);
+  });
+});
+
+describe('calculateEstimatedCost', () => {
+  describe('AWS::Lambda::Function', () => {
+    it('calculates cost with all fields', () => {
+      const resource = makeUsageBasedResource({
+        type: 'AWS::Lambda::Function',
+        unitPrice: 0.0000166667,
+        unit: 'GB-second',
+      });
+      const usage = { requests_per_month: 5000000, avg_duration_ms: 200, memory_mb: 256 };
+      const result = calculateEstimatedCost(resource, usage);
+
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe('AWS::Lambda::Function');
+      expect(result!.logicalId).toBe('MyResource');
+      expect(result!.unitPrice).toBe(0.0000166667);
+      expect(result!.unit).toBe('GB-second');
+      expect(result!.currency).toBe('USD');
+      // GB-seconds = (256/1024) * (200/1000) * 5000000 = 0.25 * 0.2 * 5000000 = 250000
+      // cost = 250000 * 0.0000166667 ≈ 4.16667
+      expect(result!.estimatedMonthlyCost).toBeCloseTo(4.16667, 2);
+      expect(result!.basis).toContain('req');
+      expect(result!.basis).toContain('200ms');
+      expect(result!.basis).toContain('256MB');
+    });
+
+    it('defaults memory_mb to 128 when not provided', () => {
+      const resource = makeUsageBasedResource({
+        type: 'AWS::Lambda::Function',
+        unitPrice: 0.0000166667,
+        unit: 'GB-second',
+      });
+      const usage = { requests_per_month: 1000000, avg_duration_ms: 100 };
+      const result = calculateEstimatedCost(resource, usage);
+
+      expect(result).not.toBeNull();
+      // GB-seconds = (128/1024) * (100/1000) * 1000000 = 0.125 * 0.1 * 1000000 = 12500
+      expect(result!.estimatedMonthlyCost).toBeCloseTo(12500 * 0.0000166667, 2);
+    });
+
+    it('returns null when avg_duration_ms is missing', () => {
+      const resource = makeUsageBasedResource({ type: 'AWS::Lambda::Function' });
+      const usage = { requests_per_month: 5000000 };
+      expect(calculateEstimatedCost(resource, usage)).toBeNull();
+    });
+
+    it('returns null when requests_per_month is missing', () => {
+      const resource = makeUsageBasedResource({ type: 'AWS::Lambda::Function' });
+      const usage = { avg_duration_ms: 200, memory_mb: 256 };
+      expect(calculateEstimatedCost(resource, usage)).toBeNull();
+    });
+  });
+
+  describe('AWS::S3::Bucket', () => {
+    it('calculates cost with storage_gb', () => {
+      const resource = makeUsageBasedResource({
+        logicalId: 'DataBucket',
+        type: 'AWS::S3::Bucket',
+        unitPrice: 0.023,
+        unit: 'GB-Mo',
+      });
+      const usage = { storage_gb: 500 };
+      const result = calculateEstimatedCost(resource, usage);
+
+      expect(result).not.toBeNull();
+      expect(result!.estimatedMonthlyCost).toBeCloseTo(500 * 0.023, 5);
+      expect(result!.basis).toContain('500GB');
+    });
+
+    it('returns null when storage_gb is missing', () => {
+      const resource = makeUsageBasedResource({ type: 'AWS::S3::Bucket' });
+      expect(calculateEstimatedCost(resource, {})).toBeNull();
+    });
+  });
+
+  describe('AWS::SQS::Queue', () => {
+    it('calculates cost with requests_per_month', () => {
+      const resource = makeUsageBasedResource({
+        logicalId: 'JobQueue',
+        type: 'AWS::SQS::Queue',
+        unitPrice: 0.0000004,
+        unit: 'Requests',
+      });
+      const usage = { requests_per_month: 10000000 };
+      const result = calculateEstimatedCost(resource, usage);
+
+      expect(result).not.toBeNull();
+      expect(result!.estimatedMonthlyCost).toBeCloseTo(10000000 * 0.0000004, 5);
+      expect(result!.basis).toContain('requests');
+    });
+
+    it('returns null when requests_per_month is missing', () => {
+      const resource = makeUsageBasedResource({ type: 'AWS::SQS::Queue' });
+      expect(calculateEstimatedCost(resource, {})).toBeNull();
+    });
+  });
+
+  describe('AWS::SNS::Topic', () => {
+    it('calculates cost with requests_per_month', () => {
+      const resource = makeUsageBasedResource({
+        logicalId: 'AlertTopic',
+        type: 'AWS::SNS::Topic',
+        unitPrice: 0.0000005,
+        unit: 'Requests',
+      });
+      const usage = { requests_per_month: 1000000 };
+      const result = calculateEstimatedCost(resource, usage);
+
+      expect(result).not.toBeNull();
+      expect(result!.estimatedMonthlyCost).toBeCloseTo(1000000 * 0.0000005, 5);
+      expect(result!.basis).toContain('notification');
+    });
+
+    it('returns null when requests_per_month is missing', () => {
+      const resource = makeUsageBasedResource({ type: 'AWS::SNS::Topic' });
+      expect(calculateEstimatedCost(resource, {})).toBeNull();
+    });
+  });
+
+  describe('AWS::ApiGateway::RestApi', () => {
+    it('calculates cost with requests_per_month', () => {
+      const resource = makeUsageBasedResource({
+        logicalId: 'MyApi',
+        type: 'AWS::ApiGateway::RestApi',
+        unitPrice: 0.0000035,
+        unit: 'Requests',
+      });
+      const usage = { requests_per_month: 2000000 };
+      const result = calculateEstimatedCost(resource, usage);
+
+      expect(result).not.toBeNull();
+      expect(result!.estimatedMonthlyCost).toBeCloseTo(2000000 * 0.0000035, 5);
+      expect(result!.basis).toContain('requests');
+    });
+
+    it('returns null when requests_per_month is missing', () => {
+      const resource = makeUsageBasedResource({ type: 'AWS::ApiGateway::RestApi' });
+      expect(calculateEstimatedCost(resource, {})).toBeNull();
+    });
+  });
+
+  describe('unknown resource type', () => {
+    it('returns null for an unrecognised type', () => {
+      const resource = makeUsageBasedResource({ type: 'AWS::Unknown::Resource' });
+      const usage = { requests_per_month: 1000000 };
+      expect(calculateEstimatedCost(resource, usage)).toBeNull();
+    });
+  });
+
+  describe('catch-all safety net', () => {
+    it('returns null when resource is null/undefined (runtime type violation)', () => {
+      // Test the catch block — never throws, always returns null
+      const result = calculateEstimatedCost(
+        null as unknown as ReturnType<typeof makeUsageBasedResource>,
+        {},
+      );
+      expect(result).toBeNull();
+    });
+  });
+});

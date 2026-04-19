@@ -46,6 +46,13 @@ vi.mock('../../../src/pricing/engine.js', () => ({
   priceStacks: (...args: unknown[]): unknown => mockPriceStacks(...args),
 }));
 
+const mockParseUsageFile = vi.fn();
+
+vi.mock('../../../src/pricing/usage-calculator.js', () => ({
+  parseUsageFile: (...args: unknown[]): unknown => mockParseUsageFile(...args),
+  calculateEstimatedCost: vi.fn(),
+}));
+
 const mockFormatTable = vi.fn();
 
 vi.mock('../../../src/output/table.js', () => ({
@@ -141,6 +148,7 @@ function makePricedStack(stackId: string): PricedStack {
     regionSource: 'template',
     pricedResources: [],
     usageBasedResources: [],
+    estimatedResources: [],
     conditionalResources: [],
     unsupportedTypes: [],
     stackMonthlyCost: 0,
@@ -392,6 +400,46 @@ describe('createProgram — breakdown command', () => {
 
     const [, , noCacheArg] = mockPriceStacks.mock.calls[0] as [unknown, unknown, boolean];
     expect(noCacheArg).toBe(true);
+  });
+
+  it('--usage-file: parseUsageFile called with correct path and result passed to priceStacks', async () => {
+    const usageData = { MyLambda: { requests_per_month: 5000000, avg_duration_ms: 200 } };
+    mockParseUsageFile.mockReturnValue(usageData);
+
+    mockCheckCredentials.mockResolvedValue(undefined);
+    mockReadAssembly.mockReturnValue(fakeAssembly);
+    mockParseStacks.mockReturnValue([makeParsedStack('MyStack')]);
+    mockPriceStacks.mockResolvedValue([makePricedStack('MyStack')]);
+    mockFormatTable.mockReturnValue('output');
+
+    const program = createProgram();
+    await program.parseAsync([
+      'node', 'stackprice', 'breakdown',
+      '--dir', '/fake/cdk.out',
+      '--usage-file', '/fake/usage.yml',
+    ]);
+
+    expect(mockParseUsageFile).toHaveBeenCalledWith('/fake/usage.yml');
+    const [, , , usageFileArg] = mockPriceStacks.mock.calls[0] as [unknown, unknown, unknown, unknown];
+    expect(usageFileArg).toEqual(usageData);
+  });
+
+  it('--usage-file missing: parseUsageFile not called and undefined passed to priceStacks', async () => {
+    mockCheckCredentials.mockResolvedValue(undefined);
+    mockReadAssembly.mockReturnValue(fakeAssembly);
+    mockParseStacks.mockReturnValue([makeParsedStack('MyStack')]);
+    mockPriceStacks.mockResolvedValue([makePricedStack('MyStack')]);
+    mockFormatTable.mockReturnValue('output');
+
+    const program = createProgram();
+    await program.parseAsync([
+      'node', 'stackprice', 'breakdown',
+      '--dir', '/fake/cdk.out',
+    ]);
+
+    expect(mockParseUsageFile).not.toHaveBeenCalled();
+    const [, , , usageFileArg] = mockPriceStacks.mock.calls[0] as [unknown, unknown, unknown, unknown];
+    expect(usageFileArg).toBeUndefined();
   });
 });
 

@@ -32,6 +32,7 @@ export interface PricedStack {
   regionSource: RegionSource;
   pricedResources: PricedResource[];
   usageBasedResources: UsageBasedResource[];
+  estimatedResources: EstimatedResource[];
   conditionalResources: PricedConditionalResource[];
   unsupportedTypes: string[];
   stackMonthlyCost: number;
@@ -58,4 +59,23 @@ export interface CacheEntry {
   result: PricingApiResult;
   cachedAt: number;
   ttlMs: number;
+}
+
+export interface ResourceUsage {
+  requests_per_month?: number;
+  avg_duration_ms?: number;
+  memory_mb?: number;
+  storage_gb?: number;
+}
+
+export type UsageFile = Record<string, ResourceUsage>;
+
+export interface EstimatedResource {
+  logicalId: string;
+  type: string;
+  estimatedMonthlyCost: number;
+  currency: 'USD';
+  basis: string;
+  unitPrice: number;
+  unit: string;
 }

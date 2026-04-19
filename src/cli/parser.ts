@@ -7,6 +7,8 @@ import { checkCredentials } from '../pricing/credentials.js';
 import { readAssembly } from '../assembly/reader.js';
 import { parseStacks } from '../template/parser.js';
 import { priceStacks } from '../pricing/engine.js';
+import { parseUsageFile } from '../pricing/usage-calculator.js';
+import type { UsageFile } from '../pricing/types.js';
 import { formatTable } from '../output/table.js';
 import { formatJson } from '../output/json.js';
 import { formatSummary } from '../output/summary.js';
@@ -44,6 +46,7 @@ interface BreakdownOptions {
   color: boolean;   // false when --no-color is passed
   verbose: boolean;
   cache: boolean;   // false when --no-cache is passed
+  usageFile?: string;
 }
 
 // ─── Type guards ─────────────────────────────────────────────────────────────
@@ -99,6 +102,7 @@ export function createProgram(): Command {
     .option('--no-color', 'Disable colour output')
     .option('--verbose', 'Show region resolution details', false)
     .option('--no-cache', 'Skip cache, always fetch fresh prices')
+    .option('--usage-file <path>', 'Path to YAML usage estimates file (optional)')
     .action(async (options: BreakdownOptions) => {
       const startTime = Date.now();
 
@@ -153,8 +157,13 @@ export function createProgram(): Command {
         }
 
         // ── 6. Price stacks ───────────────────────────────────────────────────
+        let usageFileData: UsageFile | undefined;
+        if (options.usageFile !== undefined) {
+          usageFileData = parseUsageFile(options.usageFile);
+        }
+
         const registry = createRegistry();
-        const pricedStacks = await priceStacks(stacks, registry, noCache);
+        const pricedStacks = await priceStacks(stacks, registry, noCache, usageFileData);
 
         // ── 7. Format output ──────────────────────────────────────────────────
         let formatted: string;

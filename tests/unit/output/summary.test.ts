@@ -19,6 +19,7 @@ function makeStack(overrides: Partial<PricedStack> = {}): PricedStack {
       },
     ],
     usageBasedResources: [],
+    estimatedResources: [],
     conditionalResources: [],
     unsupportedTypes: [],
     stackMonthlyCost: 70.08,

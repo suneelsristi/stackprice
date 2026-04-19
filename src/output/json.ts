@@ -4,6 +4,7 @@ import type {
   PricedStackResult,
   ResourceResult,
   UsageBasedResult,
+  EstimatedResult,
   ConditionalResult,
   BreakdownSummary,
 } from './types.js';
@@ -24,6 +25,7 @@ function buildSummary(stacks: PricedStack[], executionTimeMs: number): Breakdown
     totalResources +=
       stack.pricedResources.length +
       stack.usageBasedResources.length +
+      stack.estimatedResources.length +
       stack.conditionalResources.length;
   }
 
@@ -56,6 +58,16 @@ function toStackResult(stack: PricedStack): PricedStackResult {
     note: 'Usage-based — provide estimate via --usage-file',
   }));
 
+  const estimatedResources: EstimatedResult[] = stack.estimatedResources.map((r) => ({
+    logicalId: r.logicalId,
+    type: r.type,
+    estimatedMonthlyCost: r.estimatedMonthlyCost,
+    currency: r.currency,
+    basis: r.basis,
+    unitPrice: r.unitPrice,
+    unit: r.unit,
+  }));
+
   const conditionalResources: ConditionalResult[] = stack.conditionalResources.map((r) => ({
     logicalId: r.logicalId,
     type: r.type,
@@ -71,6 +83,7 @@ function toStackResult(stack: PricedStack): PricedStackResult {
     regionSource: stack.regionSource,
     resources,
     usageBasedResources,
+    estimatedResources,
     conditionalResources,
     unsupportedTypes: stack.unsupportedTypes,
     stackMonthlyCost: stack.stackMonthlyCost,

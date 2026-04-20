@@ -22,10 +22,10 @@ stackprice breakdown --dir ./cdk.out
   ┌──────────────────────────────┬─────────────────────────┬─────────────────┐
   │ Resource ID                  │ Type                    │ Monthly Cost    │
   ├──────────────────────────────┼─────────────────────────┼─────────────────┤
-  │ WebServer                    │ AWS::EC2::Instance       │ $124.10         │
-  │ Database                     │ AWS::RDS::DBInstance     │ $48.55          │
-  │ ProcessingQueue              │ AWS::SQS::Queue          │ Usage-based     │
-  │ ImageBucket                  │ AWS::S3::Bucket          │ Usage-based     │
+  │ WebServer                    │ AWS::EC2::Instance      │ $124.10         │
+  │ Database                     │ AWS::RDS::DBInstance    │ $48.55          │
+  │ ProcessingQueue              │ AWS::SQS::Queue         │ Usage-based     │
+  │ ImageBucket                  │ AWS::S3::Bucket         │ Usage-based     │
   ├──────────────────────────────┼─────────────────────────┼─────────────────┤
   │ Stack Subtotal                                         │ $172.65 + usage │
   └──────────────────────────────┴─────────────────────────┴─────────────────┘
@@ -150,6 +150,12 @@ and in total.
 | `--no-color` | bool | false | Disable color output |
 
 ---
+
+## CI Integration
+
+Automatically post cost estimates or cost diffs as PR comments
+using GitHub Actions. See [CI Integration](docs/ci-integration.md)
+for ready-to-use workflow recipes.
 
 ## Supported AWS Resources
 

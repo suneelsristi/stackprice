@@ -18,20 +18,23 @@ stackprice breakdown --dir ./cdk.out
 ```
 
 ```
-  Stack: ApiStack                                          Region: us-east-1
-  ┌──────────────────────────────┬─────────────────────────┬─────────────────┐
-  │ Resource ID                  │ Type                    │ Monthly Cost    │
-  ├──────────────────────────────┼─────────────────────────┼─────────────────┤
-  │ WebServer                    │ AWS::EC2::Instance      │ $124.10         │
-  │ Database                     │ AWS::RDS::DBInstance    │ $48.55          │
-  │ ProcessingQueue              │ AWS::SQS::Queue         │ Usage-based     │
-  │ ImageBucket                  │ AWS::S3::Bucket         │ Usage-based     │
-  ├──────────────────────────────┼─────────────────────────┼─────────────────┤
-  │ Stack Subtotal                                         │ $172.65 + usage │
-  └──────────────────────────────┴─────────────────────────┴─────────────────┘
+Stack: ApiStack   Region: us-east-1
+┌───────────────┬──────────────────────┬──────────────┐
+│ Resource ID   │ Type                 │ Monthly Cost │
+├───────────────┼──────────────────────┼──────────────┤
+│ WebServer     │ AWS::EC2::Instance   │ $140.16      │
+│ Database      │ AWS::RDS::DBInstance │ $12.41       │
+├───────────────┴──────────────────────┼──────────────┤
+│ Stack Subtotal                       │ $152.57      │
+└──────────────────────────────────────┴──────────────┘
+┌───────────────┬──────────────────────┬─────────────────┬──────────────────────────────────────────────────┐
+│ Resource ID   │ Type                 │ Unit Price      │ Note                                             │
+├───────────────┼──────────────────────┼─────────────────┼──────────────────────────────────────────────────┤
+│ ApiHandler    │ AWS::Lambda::Function│ $0.0000167/unit │ Usage-based — provide estimate via --usage-file  │
+│ DataBucket    │ AWS::S3::Bucket      │ $0.02/unit      │ Usage-based — provide estimate via --usage-file  │
+└───────────────┴──────────────────────┴─────────────────┴──────────────────────────────────────────────────┘
 
-  TOTAL ESTIMATED MONTHLY COST: $172.65 + usage-based resources
-  ✓ 1 stack · 4 resources priced · 2 usage-based · completed in 2.3s
+TOTAL ESTIMATED MONTHLY COST: $152.57 + usage-based
 ```
 
 ---
@@ -56,9 +59,6 @@ npm install -g stackprice
 
 # Via npx (no install required)
 npx stackprice breakdown --dir ./cdk.out
-
-# Pre-built binaries (no Node.js required)
-# Download from: github.com/suneelsristi/stackprice/releases
 ```
 
 ---
@@ -84,6 +84,9 @@ stackprice breakdown --dir ./cdk.out --output summary
 # Compare two cost estimates
 stackprice diff before.json after.json
 stackprice diff before.json after.json --format summary
+
+# Provide usage estimates for Lambda, S3, SQS, SNS, API Gateway
+stackprice breakdown --dir ./cdk.out --usage-file ./stackprice-usage.yml
 ```
 
 ---
@@ -129,7 +132,6 @@ Analyze a CDK cloud assembly and output pricing estimates.
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--dir` | string | `cdk.out` | Path to CDK cloud assembly directory |
-| `--template` | string | — | Path to a single CloudFormation JSON template |
 | `--stack` | string | all | Name of specific stack to analyze |
 | `--region` | string | from template | AWS region for pricing lookup |
 | `--output` | enum | `table` | Output format: `table`, `json`, `summary` |
@@ -137,6 +139,7 @@ Analyze a CDK cloud assembly and output pricing estimates.
 | `--no-cache` | bool | false | Skip cache, always fetch fresh pricing |
 | `--no-color` | bool | false | Disable color output |
 | `--verbose` | bool | false | Show pricing API queries and resolution details |
+| `--usage-file` | string | — | Path to YAML file with usage estimates for usage-based resources |
 
 ### `stackprice diff`
 
@@ -151,11 +154,57 @@ and in total.
 
 ---
 
+## Usage File
+
+Usage-based resources (Lambda, S3, SQS, SNS, API Gateway) show
+unit prices only by default. Provide a YAML file to get estimated
+monthly costs:
+
+```yaml
+# stackprice-usage.yml
+# Keys are logical resource IDs from your CDK template
+
+ApiHandler5E7490E8:
+  requests_per_month: 5000000   # Lambda invocations per month
+  avg_duration_ms: 200          # average duration in milliseconds
+  memory_mb: 256                # memory in MB (optional, defaults to 128)
+
+DataBucketE3889A50:
+  storage_gb: 500               # GB stored per month
+
+JobQueueEE3AD499:
+  requests_per_month: 10000000  # SQS requests per month
+
+AlertTopic2720D535:
+  requests_per_month: 1000000   # SNS notifications per month
+
+MyApi49610EDF:
+  requests_per_month: 2000000   # API Gateway REST API calls per month
+```
+
+Run with:
+```bash
+stackprice breakdown --dir ./cdk.out --usage-file ./stackprice-usage.yml
+```
+
+Estimates use Tier 1 pricing. Actual costs may be lower at high
+volume due to AWS tiered pricing discounts.
+
+---
+
 ## CI Integration
 
-Automatically post cost estimates or cost diffs as PR comments
-using GitHub Actions. See [CI Integration](docs/ci-integration.md)
-for ready-to-use workflow recipes.
+Add cost estimates or cost diffs as comments on every pull request
+using GitHub Actions — no extra services or accounts required.
+
+```yaml
+# .github/workflows/cost.yml
+- name: Estimate cost
+  run: stackprice breakdown --dir ./cdk.out --output json --out-file estimate.json
+```
+
+See [CI Integration](docs/ci-integration.md) for complete workflow
+recipes including cost diff on PRs.
 
 ## Supported AWS Resources
 
@@ -170,6 +219,7 @@ for ready-to-use workflow recipes.
 | `AWS::SQS::Queue` | Usage-based (requests) |
 | `AWS::SNS::Topic` | Usage-based (notifications) |
 | `AWS::ElastiCache::CacheCluster` | Fixed (on-demand hourly x 730 hrs/month) |
+| `AWS::ApiGateway::RestApi` | Usage-based (REST API calls, Tier 1 rate) |
 
 Unsupported resource types are skipped with a warning and listed at the end of output.
 They never cause the tool to fail.
@@ -183,7 +233,7 @@ If your CDK app uses CloudFormation Conditions to toggle resources on or off,
 
 - Conditioned resources are **excluded from the cost total**
 - They are shown in a separate section with their unit cost and condition name
-- Use `--conditions` flag in v0.2.0 to evaluate specific condition values
+- Condition evaluation is planned for a future release.
 
 ---
 
@@ -203,25 +253,28 @@ and never sends your template data to any external service. All processing is lo
 
 ## Roadmap
 
-| Version | Feature |
-|---|---|
-| v0.2.0 | `stackprice diff` — cost delta between two estimates |
-| v0.2.0 | ElastiCache support |
-| v0.2.0 | GitHub Actions CI integration docs |
-| v0.2.0 | API Gateway — blocked pending v0.3.0 bulk pricing fix |
-| v0.3.0 | `--usage-file` — provide usage estimates for Lambda, S3, data transfer |
-| v0.3.0 | `--offline` mode — no credentials required |
-| v0.3.0 | API Gateway via AWS bulk pricing files |
-| v0.4.0 | Savings Plans / Reserved Instance comparison |
-| v1.0.0 | Native CloudFormation template support (outside CDK) |
-| v1.0.0 | VS Code extension with inline cost annotations |
+| Version | Feature | Status |
+|---|---|---|
+| v0.1.0 | Core pricing engine — EC2, RDS, Lambda, S3, DynamoDB, ECS, SQS, SNS | ✅ shipped |
+| v0.1.1 | Bug fixes — credentials error message, trailing zeros, CDK internal Lambdas | ✅ shipped |
+| v0.2.0 | `stackprice diff` — cost delta between two estimates | ✅ shipped |
+| v0.2.0 | ElastiCache support | ✅ shipped |
+| v0.2.0 | GitHub Actions CI integration docs | ✅ shipped |
+| v0.3.0 | API Gateway support — fixed via Price List API query | ✅ shipped |
+| v0.3.0 | Tier 1 pricing fix — correct rates for Lambda, SQS, API Gateway | ✅ shipped |
+| v0.3.0 | `--usage-file` — monthly cost estimates for usage-based resources | ✅ shipped |
+| v0.3.0 | Table polish — CDK hash stripping, sort by price, colored total | ✅ shipped |
+| v0.4.0 | GitHub Action — `suneelsristi/stackprice-action` for PR comments | planned |
+| v0.4.0 | EKS and CloudFront handlers | planned |
+| v0.4.0 | Savings Plans / Reserved Instance comparison | planned |
+| v1.0.0 | Native CloudFormation template support (outside CDK) | planned |
+| v1.0.0 | VS Code extension with inline cost annotations | planned |
 
 ---
 
 ## Contributing
 
-Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
-opening a pull request.
+Contributions are welcome.
 
 **Branch workflow:**
 - `main` — stable, protected

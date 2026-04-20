@@ -3,6 +3,41 @@
 All notable changes to stackprice are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com).
 
+## [0.3.0] - 2026-04-20
+
+### Added
+- `--usage-file` flag — provide a YAML file with monthly usage
+  estimates for Lambda, S3, SQS, SNS, and API Gateway resources.
+  Estimated costs appear in a dedicated table section and are
+  included in the stack total. Uses Tier 1 pricing with a
+  disclaimer that actual costs may be lower at high volume.
+- AWS::ApiGateway::RestApi handler — per-request pricing now
+  correctly fetched via productFamily="API Calls" filter.
+  Previously blocked due to wrong filter field.
+
+### Fixed
+- Tier 1 pricing for all tiered services — Lambda, SQS, and
+  API Gateway were previously returning incorrect lower-tier
+  prices. All usage-based resources now show the standard
+  Tier 1 rate (beginRange=0).
+- API Gateway pricing filter — was using non-existent
+  group="Amazon API Gateway - Requests" field. Correct filter
+  is productFamily="API Calls".
+
+### Changed
+- Resource IDs in table output now strip the 8-character CDK
+  hash suffix for readability (e.g. "WebServer99EDD300" displays
+  as "WebServer"). Full IDs preserved in JSON output.
+- Usage-based resources table sorted by unit price descending.
+- Total line rendered in bold green.
+- Error messages rendered in red (StackPriceError).
+- Region fallback warning rendered in yellow.
+
+### Known Issues
+- Error messages for directory-not-found and similar errors
+  appear without color due to commander.js intercepting them
+  before the chalk handler runs. Tracked in issue #XX.
+
 ## [0.2.0] - 2026-04-18
 
 ### Added

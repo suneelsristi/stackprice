@@ -27,6 +27,7 @@ import { snsHandler } from '../registry/handlers/sns.js';
 import { elasticacheHandler } from '../registry/handlers/elasticache.js';
 import { apigatewayHandler } from '../registry/handlers/apigateway.js';
 import { secretsManagerHandler } from '../registry/handlers/secretsmanager.js';
+import { eksHandler } from '../registry/handlers/eks.js';
 import { StackPriceError } from '../errors/index.js';
 import packageJson from '../../package.json';
 
@@ -79,6 +80,7 @@ function createRegistry(): ResourceHandlerRegistry {
   registry.register(elasticacheHandler);
   registry.register(apigatewayHandler);
   registry.register(secretsManagerHandler);
+  registry.register(eksHandler);
   return registry;
 }
 

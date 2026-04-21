@@ -44,6 +44,7 @@ function makeUsageBasedResource(overrides: Partial<UsageBasedResource> = {}): Us
 describe('parseUsageFile', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('returns correct UsageFile for valid YAML', () => {
@@ -132,6 +133,76 @@ describe('parseUsageFile', () => {
     const result = parseUsageFile('/some/usage.yml');
     expect(result).toEqual({ MyBucket: { storage_gb: 500 } });
     expect('MyLambda' in result).toBe(false);
+  });
+
+  it('parses .json file using JSON.parse and returns correct UsageFile', () => {
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue('{"MyLambda":{"requests_per_month":1000000,"avg_duration_ms":200}}');
+    const jsonParseSpy = vi.spyOn(JSON, 'parse');
+
+    const result = parseUsageFile('/some/usage.json');
+
+    expect(jsonParseSpy).toHaveBeenCalled();
+    expect(mockYamlLoad).not.toHaveBeenCalled();
+    expect(result).toEqual({ MyLambda: { requests_per_month: 1000000, avg_duration_ms: 200 } });
+  });
+
+  it('treats .JSON extension as JSON (case-insensitive)', () => {
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue('{"MyBucket":{"storage_gb":100}}');
+    const jsonParseSpy = vi.spyOn(JSON, 'parse');
+
+    const result = parseUsageFile('/some/usage.JSON');
+
+    expect(jsonParseSpy).toHaveBeenCalled();
+    expect(mockYamlLoad).not.toHaveBeenCalled();
+    expect(result).toEqual({ MyBucket: { storage_gb: 100 } });
+  });
+
+  it('uses js-yaml for .yaml extension', () => {
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue('yaml content');
+    mockYamlLoad.mockReturnValue({ MyBucket: { storage_gb: 200 } });
+
+    const result = parseUsageFile('/some/usage.yaml');
+
+    expect(mockYamlLoad).toHaveBeenCalled();
+    expect(result).toEqual({ MyBucket: { storage_gb: 200 } });
+  });
+
+  it('treats .YML extension as YAML (case-insensitive)', () => {
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue('yaml content');
+    mockYamlLoad.mockReturnValue({ MyQueue: { requests_per_month: 500 } });
+
+    const result = parseUsageFile('/some/usage.YML');
+
+    expect(mockYamlLoad).toHaveBeenCalled();
+    expect(result).toEqual({ MyQueue: { requests_per_month: 500 } });
+  });
+
+  it('throws StackPriceError for invalid JSON content', () => {
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue('not valid json {{ }}');
+    vi.spyOn(JSON, 'parse').mockImplementation(() => {
+      throw new SyntaxError('Unexpected token');
+    });
+
+    expect(() => parseUsageFile('/some/usage.json')).toThrow(StackPriceError);
+    expect(() => parseUsageFile('/some/usage.json')).toThrow('Invalid JSON');
+  });
+
+  it('throws StackPriceError for .toml extension before reading file', () => {
+    expect(() => parseUsageFile('/some/usage.toml')).toThrow(StackPriceError);
+    expect(() => parseUsageFile('/some/usage.toml')).toThrow('--usage-file must be');
+    expect(mockExistsSync).not.toHaveBeenCalled();
+    expect(mockReadFileSync).not.toHaveBeenCalled();
+  });
+
+  it('throws StackPriceError for .txt extension before reading file', () => {
+    expect(() => parseUsageFile('/some/usage.txt')).toThrow(StackPriceError);
+    expect(() => parseUsageFile('/some/usage.txt')).toThrow('--usage-file must be');
+    expect(mockReadFileSync).not.toHaveBeenCalled();
   });
 });
 

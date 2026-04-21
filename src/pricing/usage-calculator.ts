@@ -6,6 +6,15 @@ import type { UsageFile, ResourceUsage, EstimatedResource, UsageBasedResource } 
 
 export function parseUsageFile(filePath: string): UsageFile {
   const resolved = path.resolve(filePath);
+  const ext = path.extname(resolved).toLowerCase();
+
+  if (ext !== '.yml' && ext !== '.yaml' && ext !== '.json') {
+    throw new StackPriceError(
+      `--usage-file must be a .yml, .yaml, or .json file. Got: ${path.extname(resolved)}`,
+      2,
+    );
+  }
+
   if (!fs.existsSync(resolved)) {
     throw new StackPriceError(`Usage file not found: ${filePath}`, 2);
   }
@@ -18,10 +27,18 @@ export function parseUsageFile(filePath: string): UsageFile {
   }
 
   let parsed: unknown;
-  try {
-    parsed = load(content);
-  } catch {
-    throw new StackPriceError(`Invalid YAML in usage file: ${filePath}`, 2);
+  if (ext === '.json') {
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      throw new StackPriceError(`Invalid JSON in usage file: ${filePath}`, 2);
+    }
+  } else {
+    try {
+      parsed = load(content);
+    } catch {
+      throw new StackPriceError(`Invalid YAML in usage file: ${filePath}`, 2);
+    }
   }
 
   if (parsed === null || parsed === undefined) {

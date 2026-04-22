@@ -126,11 +126,11 @@ describe('apigatewayHandler', () => {
       expect(loc).toBe('US East (N. Virginia)');
     });
 
-    it('maps eu-west-1 to Europe (Ireland)', () => {
+    it('maps eu-west-1 to EU (Ireland)', () => {
       const attrs = apigatewayHandler.extractPricingAttributes(makeResource({}))!;
       const query = apigatewayHandler.buildPricingQuery(attrs, 'eu-west-1');
       const loc = query.filters.find((f) => f.field === 'location')?.value;
-      expect(loc).toBe('Europe (Ireland)');
+      expect(loc).toBe('EU (Ireland)');
     });
 
     it('passes through unknown regions unchanged', () => {

@@ -117,11 +117,11 @@ describe('lambdaHandler', () => {
       expect(loc).toBe('US East (N. Virginia)');
     });
 
-    it('maps eu-central-1 to Europe (Frankfurt)', () => {
+    it('maps eu-central-1 to EU (Frankfurt)', () => {
       const attrs = lambdaHandler.extractPricingAttributes(makeResource({}))!;
       const query = lambdaHandler.buildPricingQuery(attrs, 'eu-central-1');
       const loc = query.filters.find((f) => f.field === 'location')?.value;
-      expect(loc).toBe('Europe (Frankfurt)');
+      expect(loc).toBe('EU (Frankfurt)');
     });
 
     it('passes through unknown regions unchanged', () => {

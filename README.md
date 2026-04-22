@@ -139,7 +139,7 @@ Analyze a CDK cloud assembly and output pricing estimates.
 | `--no-cache` | bool | false | Skip cache, always fetch fresh pricing |
 | `--no-color` | bool | false | Disable color output |
 | `--verbose` | bool | false | Show pricing API queries and resolution details |
-| `--usage-file` | string | — | Path to YAML file with usage estimates for usage-based resources |
+| `--usage-file` | string | — | Path to YAML or JSON file with usage estimates for usage-based resources |
 
 ### `stackprice diff`
 
@@ -182,6 +182,20 @@ MyApi49610EDF:
   requests_per_month: 2000000   # API Gateway REST API calls per month
 ```
 
+JSON format is also supported:
+```json
+{
+  "ApiHandler5E7490E8": {
+    "requests_per_month": 5000000,
+    "avg_duration_ms": 200,
+    "memory_mb": 256
+  },
+  "DataBucketE3889A50": {
+    "storage_gb": 500
+  }
+}
+```
+
 Run with:
 ```bash
 stackprice breakdown --dir ./cdk.out --usage-file ./stackprice-usage.yml
@@ -220,6 +234,8 @@ recipes including cost diff on PRs.
 | `AWS::SNS::Topic` | Usage-based (notifications) |
 | `AWS::ElastiCache::CacheCluster` | Fixed (on-demand hourly x 730 hrs/month) |
 | `AWS::ApiGateway::RestApi` | Usage-based (REST API calls, Tier 1 rate) |
+| `AWS::SecretsManager::Secret` | Fixed ($0.40/secret/month) |
+| `AWS::EKS::Cluster` | Fixed (control plane $0.10/hour × 730 hrs/month) |
 
 Unsupported resource types are skipped with a warning and listed at the end of output.
 They never cause the tool to fail.
@@ -260,13 +276,17 @@ and never sends your template data to any external service. All processing is lo
 | v0.2.0 | `stackprice diff` — cost delta between two estimates | ✅ shipped |
 | v0.2.0 | ElastiCache support | ✅ shipped |
 | v0.2.0 | GitHub Actions CI integration docs | ✅ shipped |
-| v0.3.0 | API Gateway support — fixed via Price List API query | ✅ shipped |
+| v0.3.0 | API Gateway support | ✅ shipped |
 | v0.3.0 | Tier 1 pricing fix — correct rates for Lambda, SQS, API Gateway | ✅ shipped |
 | v0.3.0 | `--usage-file` — monthly cost estimates for usage-based resources | ✅ shipped |
 | v0.3.0 | Table polish — CDK hash stripping, sort by price, colored total | ✅ shipped |
-| v0.4.0 | GitHub Action — `suneelsristi/stackprice-action` for PR comments | planned |
-| v0.4.0 | EKS and CloudFront handlers | planned |
-| v0.4.0 | Savings Plans / Reserved Instance comparison | planned |
+| v0.4.0 | Secrets Manager and EKS handlers | ✅ shipped |
+| v0.4.0 | EU region pricing fix — broken since v0.1.0 | ✅ shipped |
+| v0.4.0 | Region coverage expanded from 13 to 38 regions | ✅ shipped |
+| v0.4.0 | `--usage-file` JSON support | ✅ shipped |
+| v0.5.0 | GitHub Action — `suneelsristi/stackprice-action` for PR comments | planned |
+| v0.5.0 | CloudFront handler | planned |
+| v0.5.0 | NAT Gateway handler | planned |
 | v1.0.0 | Native CloudFormation template support (outside CDK) | planned |
 | v1.0.0 | VS Code extension with inline cost annotations | planned |
 

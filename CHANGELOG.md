@@ -3,6 +3,33 @@
 All notable changes to stackprice are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com).
 
+## [0.4.0] - 2026-04-22
+
+### Added
+- AWS::SecretsManager::Secret handler — fixed cost at $0.40/secret/month.
+  Appears correctly priced on virtually every CDK stack that uses RDS,
+  Aurora, or any other secret-backed resource.
+- AWS::EKS::Cluster handler — fixed cost at $0.10/hour ($73.00/month)
+  for the EKS control plane. Excludes Outposts variants.
+- --usage-file now accepts JSON in addition to YAML. File format is
+  detected by extension (.json → JSON.parse, .yml/.yaml → js-yaml).
+  Unrecognised extensions throw a clear error message.
+
+### Fixed
+- CRITICAL: EU region pricing broken since v0.1.0. The AWS Pricing API
+  uses "EU (Ireland)", "EU (London)", "EU (Frankfurt)" etc. — not
+  "Europe (Ireland)" as previously mapped. Any user with stacks in
+  eu-west-1, eu-west-2, eu-central-1, eu-west-3, eu-north-1, or
+  eu-south-1 was receiving no pricing results for any resource.
+  All EU location strings corrected.
+
+### Changed
+- REGION_TO_LOCATION map expanded from 13 to 38 regions. New regions
+  added: eu-west-3, eu-central-2, eu-north-1, eu-south-1, eu-south-2,
+  ap-southeast-3 through ap-southeast-6, ap-northeast-2, ap-northeast-3,
+  ap-south-2, ap-east-1, ap-east-2, ca-west-1, af-south-1, me-south-1,
+  me-central-1, il-central-1, mx-central-1, us-gov-east-1, us-gov-west-1.
+
 ## [0.3.0] - 2026-04-20
 
 ### Added

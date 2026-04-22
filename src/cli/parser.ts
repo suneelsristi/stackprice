@@ -4,6 +4,14 @@ import * as path from 'path';
 import { Command } from 'commander';
 import chalk from 'chalk';
 
+import {
+  discoverUsageResources,
+  generateYaml,
+  generateJson,
+  writeGeneratedFile,
+  TYPE_MAP,
+} from '../generate/usage-file-generator.js';
+
 import { checkCredentials } from '../pricing/credentials.js';
 import { readAssembly } from '../assembly/reader.js';
 import { parseStacks } from '../template/parser.js';
@@ -28,7 +36,7 @@ import { elasticacheHandler } from '../registry/handlers/elasticache.js';
 import { apigatewayHandler } from '../registry/handlers/apigateway.js';
 import { secretsManagerHandler } from '../registry/handlers/secretsmanager.js';
 import { eksHandler } from '../registry/handlers/eks.js';
-import { StackPriceError } from '../errors/index.js';
+import { EXIT_CODES, StackPriceError } from '../errors/index.js';
 import packageJson from '../../package.json';
 
 // ─── Commander option shapes ──────────────────────────────────────────────────
@@ -296,6 +304,112 @@ export function createProgram(): Command {
         } else {
           process.stdout.write(formatted + '\n');
         }
+      } catch (err: unknown) {
+        if (err instanceof StackPriceError) {
+          process.stderr.write(chalk.red(`✗ ${err.message}\n`));
+          process.exit(err.exitCode);
+        } else {
+          process.stderr.write(chalk.red(`An unexpected error occurred.\n`));
+          process.exit(2);
+        }
+      }
+    });
+
+  // ── generate ───────────────────────────────────────────────────────────────
+
+  const generateCmd = program
+    .command('generate')
+    .description('Generate files from a CDK cloud assembly');
+
+  generateCmd
+    .command('usage-file')
+    .description('Generate a pre-populated usage estimates file for usage-based resources')
+    .option('--dir <path>', 'Path to CDK cloud assembly directory', 'cdk.out')
+    .option('--stack <name>', 'Filter to a specific stack name (optional)')
+    .option('--format <format>', 'Output format: yaml or json', 'yaml')
+    .option('--out-file <path>', 'Output file path (default depends on --format)')
+    .option('--force', 'Overwrite existing output file', false)
+    .option('--types <list>', 'Comma-separated resource types to include (e.g. Lambda,S3)')
+    .option('--no-color', 'Disable colour output')
+    .action((options: {
+      dir: string;
+      stack?: string;
+      format: string;
+      outFile?: string;
+      force: boolean;
+      types?: string;
+      color: boolean;
+    }) => {
+      chalk.level = options.color ? 3 : 0;
+
+      try {
+        // ── Validate --format ──────────────────────────────────────────────────
+        if (options.format !== 'yaml' && options.format !== 'json') {
+          throw new StackPriceError(
+            `Invalid format "${options.format}". Must be yaml or json.`,
+            EXIT_CODES.FAILURE,
+          );
+        }
+
+        const format = options.format as 'yaml' | 'json';
+
+        // ── Resolve default outFile ────────────────────────────────────────────
+        const outFile = options.outFile ?? (format === 'json' ? 'stackprice-usage.json' : 'stackprice-usage.yml');
+
+        // ── Validate --types ───────────────────────────────────────────────────
+        const validShortNames = Object.keys(TYPE_MAP);
+        let typeFilter: string[] = [];
+
+        if (options.types !== undefined) {
+          typeFilter = options.types.split(',').map((t) => t.trim()).filter((t) => t.length > 0);
+          for (const t of typeFilter) {
+            if (!Object.prototype.hasOwnProperty.call(TYPE_MAP, t)) {
+              throw new StackPriceError(
+                `Unknown resource type '${t}'. Valid types: ${validShortNames.join(', ')}`,
+                EXIT_CODES.FAILURE,
+              );
+            }
+          }
+        }
+
+        // ── Discover resources ─────────────────────────────────────────────────
+        const resources = discoverUsageResources(options.dir, options.stack, typeFilter.length > 0 ? typeFilter : undefined);
+
+        if (resources.length === 0) {
+          process.stderr.write(`Warning: No usage-based resources found in ${options.dir}.\n`);
+        }
+
+        // ── Generate content ───────────────────────────────────────────────────
+        const generateOptions = {
+          dir: options.dir,
+          stack: options.stack,
+          format,
+          outFile,
+          force: options.force,
+          types: typeFilter,
+        };
+
+        const content = format === 'json'
+          ? generateJson(resources, generateOptions)
+          : generateYaml(resources, generateOptions);
+
+        // ── Write file ─────────────────────────────────────────────────────────
+        writeGeneratedFile(content, outFile, options.force);
+
+        // ── Print confirmation ─────────────────────────────────────────────────
+        const typeCounts = new Map<string, number>();
+        for (const r of resources) {
+          typeCounts.set(r.type, (typeCounts.get(r.type) ?? 0) + 1);
+        }
+
+        process.stdout.write(`Generated ${outFile} with ${resources.length} usage-based resources:\n`);
+        for (const [cfnType, count] of typeCounts) {
+          process.stdout.write(`  ${count} × ${cfnType}\n`);
+        }
+        process.stdout.write(`\nEdit the TODO values, then run:\n`);
+        process.stdout.write(`  stackprice breakdown --dir ${options.dir} --usage-file ${outFile}\n`);
+        process.stdout.write(`\nNote: Generated without AWS credentials.\n`);
+
       } catch (err: unknown) {
         if (err instanceof StackPriceError) {
           process.stderr.write(chalk.red(`✗ ${err.message}\n`));

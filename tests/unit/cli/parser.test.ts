@@ -83,6 +83,27 @@ vi.mock('../../../src/output/diff.js', () => ({
   formatDiffSummary: (...args: unknown[]): unknown => mockFormatDiffSummary(...args),
 }));
 
+const mockDiscoverUsageResources = vi.fn();
+const mockGenerateYaml = vi.fn();
+const mockGenerateJson = vi.fn();
+const mockWriteGeneratedFile = vi.fn();
+
+vi.mock('../../../src/generate/usage-file-generator.js', () => ({
+  discoverUsageResources: (...args: unknown[]): unknown => mockDiscoverUsageResources(...args),
+  generateYaml: (...args: unknown[]): unknown => mockGenerateYaml(...args),
+  generateJson: (...args: unknown[]): unknown => mockGenerateJson(...args),
+  writeGeneratedFile: (...args: unknown[]): unknown => mockWriteGeneratedFile(...args),
+  TYPE_MAP: {
+    Lambda: 'AWS::Lambda::Function',
+    S3: 'AWS::S3::Bucket',
+    SQS: 'AWS::SQS::Queue',
+    SNS: 'AWS::SNS::Topic',
+    ApiGateway: 'AWS::ApiGateway::RestApi',
+    NatGateway: 'AWS::EC2::NatGateway',
+    CloudFront: 'AWS::CloudFront::Distribution',
+  },
+}));
+
 import { createProgram } from '../../../src/cli/parser.js';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -643,5 +664,158 @@ describe('createProgram — diff command', () => {
       expect.stringContaining('Use --verbose'),
     );
     expect(mockExit).toHaveBeenCalledWith(2);
+  });
+});
+
+// ─── generate usage-file command ──────────────────────────────────────────────
+
+describe('createProgram — generate usage-file command', () => {
+  let mockExit: ReturnType<typeof vi.spyOn>;
+  let mockStderr: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    mockStderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    mockDiscoverUsageResources.mockReturnValue([]);
+    mockGenerateYaml.mockReturnValue('# yaml output\n');
+    mockGenerateJson.mockReturnValue('{}');
+    mockWriteGeneratedFile.mockReturnValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('discoverUsageResources called with correct dir and stack args', async () => {
+    const program = createProgram();
+    await program.parseAsync([
+      'node', 'stackprice', 'generate', 'usage-file',
+      '--dir', '/fake/cdk.out',
+      '--stack', 'MyStack',
+    ]);
+
+    expect(mockDiscoverUsageResources).toHaveBeenCalledWith(
+      '/fake/cdk.out',
+      'MyStack',
+      undefined,
+    );
+  });
+
+  it('--format json sets stackprice-usage.json as default outFile', async () => {
+    const program = createProgram();
+    await program.parseAsync([
+      'node', 'stackprice', 'generate', 'usage-file',
+      '--format', 'json',
+    ]);
+
+    expect(mockGenerateJson).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({ outFile: 'stackprice-usage.json' }),
+    );
+    expect(mockWriteGeneratedFile).toHaveBeenCalledWith(
+      expect.any(String),
+      'stackprice-usage.json',
+      false,
+    );
+  });
+
+  it('default format yaml sets stackprice-usage.yml as default outFile', async () => {
+    const program = createProgram();
+    await program.parseAsync(['node', 'stackprice', 'generate', 'usage-file']);
+
+    expect(mockGenerateYaml).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({ outFile: 'stackprice-usage.yml' }),
+    );
+    expect(mockWriteGeneratedFile).toHaveBeenCalledWith(
+      expect.any(String),
+      'stackprice-usage.yml',
+      false,
+    );
+  });
+
+  it('invalid --types value exits with error', async () => {
+    const program = createProgram();
+    await program.parseAsync([
+      'node', 'stackprice', 'generate', 'usage-file',
+      '--types', 'Lambda,INVALID',
+    ]);
+
+    expect(mockStderr).toHaveBeenCalledWith(expect.stringContaining('Unknown resource type'));
+    expect(mockStderr).toHaveBeenCalledWith(expect.stringContaining('INVALID'));
+    expect(mockExit).toHaveBeenCalledWith(2);
+  });
+
+  it('valid --types passes filtered array to discoverUsageResources', async () => {
+    const program = createProgram();
+    await program.parseAsync([
+      'node', 'stackprice', 'generate', 'usage-file',
+      '--types', 'Lambda,S3',
+    ]);
+
+    expect(mockDiscoverUsageResources).toHaveBeenCalledWith(
+      expect.any(String),
+      undefined,
+      ['Lambda', 'S3'],
+    );
+  });
+
+  it('--force passed as true to writeGeneratedFile', async () => {
+    const program = createProgram();
+    await program.parseAsync([
+      'node', 'stackprice', 'generate', 'usage-file',
+      '--force',
+    ]);
+
+    expect(mockWriteGeneratedFile).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      true,
+    );
+  });
+
+  it('--stack passed to discoverUsageResources', async () => {
+    const program = createProgram();
+    await program.parseAsync([
+      'node', 'stackprice', 'generate', 'usage-file',
+      '--stack', 'TargetStack',
+    ]);
+
+    expect(mockDiscoverUsageResources).toHaveBeenCalledWith(
+      expect.any(String),
+      'TargetStack',
+      undefined,
+    );
+  });
+
+  it('no usage-based resources found prints warning to stderr', async () => {
+    mockDiscoverUsageResources.mockReturnValue([]);
+    const program = createProgram();
+    await program.parseAsync(['node', 'stackprice', 'generate', 'usage-file']);
+
+    expect(mockStderr).toHaveBeenCalledWith(expect.stringContaining('No usage-based resources found'));
+    expect(mockExit).not.toHaveBeenCalled();
+  });
+
+  it('StackPriceError from discoverUsageResources → stderr + exit 2', async () => {
+    const { StackPriceError: SPE } = await import('../../../src/errors/index.js');
+    mockDiscoverUsageResources.mockImplementation(() => {
+      throw new SPE('Stack not found', 2);
+    });
+
+    const program = createProgram();
+    await program.parseAsync(['node', 'stackprice', 'generate', 'usage-file']);
+
+    expect(mockStderr).toHaveBeenCalledWith(expect.stringContaining('Stack not found'));
+    expect(mockExit).toHaveBeenCalledWith(2);
+  });
+
+  it('does NOT call checkCredentials', async () => {
+    const program = createProgram();
+    await program.parseAsync(['node', 'stackprice', 'generate', 'usage-file']);
+
+    expect(mockCheckCredentials).not.toHaveBeenCalled();
   });
 });

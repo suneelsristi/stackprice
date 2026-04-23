@@ -20,8 +20,8 @@ describe('ec2Handler', () => {
     expect(ec2Handler.resourceType).toBe('AWS::EC2::Instance');
   });
 
-  it('is not usage-based', () => {
-    expect(ec2Handler.isUsageBased).toBe(false);
+  it('pricingType is fixed', () => {
+    expect(ec2Handler.pricingType).toBe('fixed');
   });
 
   // ─── extractPricingAttributes ───────────────────────────────────────────────

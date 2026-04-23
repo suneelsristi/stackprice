@@ -27,20 +27,20 @@ describe('dynamodbHandler', () => {
     expect(dynamodbHandler.resourceType).toBe('AWS::DynamoDB::Table');
   });
 
-  it('handler-level isUsageBased is false', () => {
-    expect(dynamodbHandler.isUsageBased).toBe(false);
+  it('handler-level pricingType is fixed', () => {
+    expect(dynamodbHandler.pricingType).toBe('fixed');
   });
 
   // ─── extractPricingAttributes — PAY_PER_REQUEST ─────────────────────────────
 
   describe('extractPricingAttributes — PAY_PER_REQUEST', () => {
-    it('returns attrs with isUsageBased=true when BillingMode is PAY_PER_REQUEST', () => {
+    it('returns attrs with pricingType=usage-based when BillingMode is PAY_PER_REQUEST', () => {
       const attrs = dynamodbHandler.extractPricingAttributes(
         makeResource({ BillingMode: 'PAY_PER_REQUEST' }),
       );
       expect(attrs).not.toBeNull();
       expect(attrs!['billingMode']).toBe('PAY_PER_REQUEST');
-      expect(attrs!['isUsageBased']).toBe(true);
+      expect(attrs!['pricingType']).toBe('usage-based');
     });
 
     it('returns null when BillingMode is absent and ProvisionedThroughput is absent', () => {
@@ -70,11 +70,11 @@ describe('dynamodbHandler', () => {
   // ─── extractPricingAttributes — PROVISIONED ─────────────────────────────────
 
   describe('extractPricingAttributes — PROVISIONED', () => {
-    it('returns attrs with isUsageBased=false for PROVISIONED', () => {
+    it('returns attrs with pricingType=fixed for PROVISIONED', () => {
       const attrs = dynamodbHandler.extractPricingAttributes(makeProvisionedResource());
       expect(attrs).not.toBeNull();
       expect(attrs!['billingMode']).toBe('PROVISIONED');
-      expect(attrs!['isUsageBased']).toBe(false);
+      expect(attrs!['pricingType']).toBe('fixed');
     });
 
     it('treats as PROVISIONED when ProvisionedThroughput present but BillingMode absent', () => {
@@ -83,7 +83,7 @@ describe('dynamodbHandler', () => {
       );
       expect(attrs).not.toBeNull();
       expect(attrs!['billingMode']).toBe('PROVISIONED');
-      expect(attrs!['isUsageBased']).toBe(false);
+      expect(attrs!['pricingType']).toBe('fixed');
     });
 
     it('captures ReadCapacityUnits and WriteCapacityUnits', () => {

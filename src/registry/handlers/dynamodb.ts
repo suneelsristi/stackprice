@@ -13,14 +13,14 @@ interface DynamoDbAttributes extends PricingAttributes {
 
 export const dynamodbHandler: ResourceHandler = {
   resourceType: 'AWS::DynamoDB::Table',
-  isUsageBased: false,
+  pricingType: 'fixed',
 
   extractPricingAttributes(resource: ResourceRecord): PricingAttributes | null {
     const { properties } = resource;
 
     // Explicit PAY_PER_REQUEST billing mode — check first.
     if (properties['BillingMode'] === 'PAY_PER_REQUEST') {
-      return { billingMode: 'PAY_PER_REQUEST', isUsageBased: true } satisfies DynamoDbAttributes;
+      return { billingMode: 'PAY_PER_REQUEST', pricingType: 'usage-based' } satisfies DynamoDbAttributes;
     }
 
     // ProvisionedThroughput present → PROVISIONED regardless of BillingMode field.
@@ -36,7 +36,7 @@ export const dynamodbHandler: ResourceHandler = {
 
       return {
         billingMode: 'PROVISIONED',
-        isUsageBased: false,
+        pricingType: 'fixed',
         readCapacityUnits,
         writeCapacityUnits,
       } satisfies DynamoDbAttributes;

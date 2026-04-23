@@ -44,7 +44,7 @@ const REGION_TO_APIGW_PREFIX: Record<string, string> = {
 
 export const apigatewayHandler: ResourceHandler = {
   resourceType: 'AWS::ApiGateway::RestApi',
-  isUsageBased: true,
+  pricingType: 'usage-based',
 
   extractPricingAttributes(resource: ResourceRecord): PricingAttributes | null {
     const { properties } = resource;

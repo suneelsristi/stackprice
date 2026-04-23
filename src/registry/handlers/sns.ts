@@ -9,7 +9,7 @@ interface SnsAttributes extends PricingAttributes {
 
 export const snsHandler: ResourceHandler = {
   resourceType: 'AWS::SNS::Topic',
-  isUsageBased: true,
+  pricingType: 'usage-based',
 
   extractPricingAttributes(resource: ResourceRecord): PricingAttributes | null {
     const { properties } = resource;

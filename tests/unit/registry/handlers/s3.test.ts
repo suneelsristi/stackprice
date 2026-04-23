@@ -20,8 +20,8 @@ describe('s3Handler', () => {
     expect(s3Handler.resourceType).toBe('AWS::S3::Bucket');
   });
 
-  it('is usage-based', () => {
-    expect(s3Handler.isUsageBased).toBe(true);
+  it('pricingType is usage-based', () => {
+    expect(s3Handler.pricingType).toBe('usage-based');
   });
 
   // ─── extractPricingAttributes ───────────────────────────────────────────────

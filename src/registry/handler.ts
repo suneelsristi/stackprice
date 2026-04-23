@@ -53,13 +53,15 @@ export const REGION_TO_LOCATION: Record<string, string | undefined> = {
 
 // ─── Shared handler types ─────────────────────────────────────────────────────
 
+export type PricingType = 'fixed' | 'usage-based' | 'mixed';
+
 /**
  * Attributes extracted from a CloudFormation resource, keyed by field name.
- * `isUsageBased` is an optional per-resource override of the handler's default.
- * When present, the engine uses this value instead of `ResourceHandler.isUsageBased`.
+ * `pricingType` is an optional per-resource override of the handler's default.
+ * When present, the engine uses this value instead of `ResourceHandler.pricingType`.
  */
 export interface PricingAttributes {
-  isUsageBased?: boolean;
+  pricingType?: PricingType;
   [key: string]: unknown;
 }
 
@@ -77,11 +79,10 @@ export interface ResourceHandler {
   readonly resourceType: string;
 
   /**
-   * Handler-level default. true means pricing is per-request/usage-based and
-   * a fixed monthly amount cannot be determined without usage data.
-   * Per-resource overrides live in PricingAttributes.isUsageBased.
+   * Handler-level default pricing classification.
+   * Per-resource overrides live in PricingAttributes.pricingType.
    */
-  readonly isUsageBased: boolean;
+  readonly pricingType: PricingType;
 
   /**
    * Extract the attributes needed to build a pricing query from a raw
@@ -101,4 +102,10 @@ export interface ResourceHandler {
    * Returns null if the result has an unexpected unit or is otherwise unusable.
    */
   calculateMonthlyCost(result: PricingApiResult): MonthlyPrice | null;
+
+  /**
+   * Build the usage-based component query for mixed handlers.
+   * Only required when pricingType === 'mixed'.
+   */
+  buildUsagePricingQuery?(attributes: PricingAttributes, region: string): PricingQuery;
 }

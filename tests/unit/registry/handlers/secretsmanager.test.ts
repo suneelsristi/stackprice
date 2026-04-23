@@ -20,8 +20,8 @@ describe('secretsManagerHandler', () => {
     expect(secretsManagerHandler.resourceType).toBe('AWS::SecretsManager::Secret');
   });
 
-  it('isUsageBased is false', () => {
-    expect(secretsManagerHandler.isUsageBased).toBe(false);
+  it('pricingType is fixed', () => {
+    expect(secretsManagerHandler.pricingType).toBe('fixed');
   });
 
   // ─── extractPricingAttributes ───────────────────────────────────────────────

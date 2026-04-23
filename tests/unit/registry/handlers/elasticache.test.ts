@@ -20,8 +20,8 @@ describe('elasticacheHandler', () => {
     expect(elasticacheHandler.resourceType).toBe('AWS::ElastiCache::CacheCluster');
   });
 
-  it('isUsageBased is false', () => {
-    expect(elasticacheHandler.isUsageBased).toBe(false);
+  it('pricingType is fixed', () => {
+    expect(elasticacheHandler.pricingType).toBe('fixed');
   });
 
   // ─── extractPricingAttributes ───────────────────────────────────────────────

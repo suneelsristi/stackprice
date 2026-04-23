@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ParsedStack, ResourceRecord, ConditionalResourceRecord } from '../../../src/template/types.js';
 import type { PricingApiResult } from '../../../src/pricing/types.js';
-import type { ResourceHandler, PricingAttributes, MonthlyPrice } from '../../../src/registry/handler.js';
+import type { ResourceHandler, PricingAttributes, MonthlyPrice, PricingType } from '../../../src/registry/handler.js';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -48,7 +48,7 @@ function makeMonthlyPrice(amount: number, unit = 'Hrs', currency = 'USD'): Month
 function makeFixedHandler(overrides: Partial<ResourceHandler> = {}): ResourceHandler {
   return {
     resourceType: 'AWS::EC2::Instance',
-    isUsageBased: false,
+    pricingType: 'fixed',
     extractPricingAttributes: (_r: ResourceRecord) => ({ instanceType: 'm5.large' }),
     buildPricingQuery: (_a: PricingAttributes, region: string) => ({
       serviceCode: 'AmazonEC2',
@@ -62,13 +62,32 @@ function makeFixedHandler(overrides: Partial<ResourceHandler> = {}): ResourceHan
 function makeUsageHandler(overrides: Partial<ResourceHandler> = {}): ResourceHandler {
   return {
     resourceType: 'AWS::Lambda::Function',
-    isUsageBased: true,
+    pricingType: 'usage-based',
     extractPricingAttributes: (_r: ResourceRecord) => ({ memorySize: 128 }),
     buildPricingQuery: (_a: PricingAttributes, region: string) => ({
       serviceCode: 'AWSLambda',
       filters: [{ field: 'location', value: region }],
     }),
     calculateMonthlyCost: (_result: PricingApiResult) => null,
+    ...overrides,
+  };
+}
+
+function makeMixedHandler(overrides: Partial<ResourceHandler> = {}): ResourceHandler {
+  return {
+    resourceType: 'AWS::EC2::NatGateway',
+    pricingType: 'mixed',
+    extractPricingAttributes: (_r: ResourceRecord) => ({}),
+    buildPricingQuery: (_a: PricingAttributes, _region: string) => ({
+      serviceCode: 'AmazonEC2',
+      filters: [{ field: 'group', value: 'NatGateway-Hours' }],
+    }),
+    buildUsagePricingQuery: (_a: PricingAttributes, _region: string) => ({
+      serviceCode: 'AmazonEC2',
+      filters: [{ field: 'group', value: 'NatGateway-Bytes' }],
+    }),
+    calculateMonthlyCost: (result: PricingApiResult) =>
+      result.unit === 'Hrs' ? makeMonthlyPrice(result.pricePerUnit * 730) : null,
     ...overrides,
   };
 }
@@ -534,7 +553,7 @@ describe('priceStacks', () => {
     function makeEcsHandler(vCpuFraction: number): ResourceHandler {
       return {
         resourceType: 'AWS::ECS::TaskDefinition',
-        isUsageBased: false,
+        pricingType: 'fixed',
         extractPricingAttributes: (_r: ResourceRecord) => ({ cpuUnits: '256', vCpuFraction }),
         buildPricingQuery: (_a: PricingAttributes, region: string) => ({
           serviceCode: 'AmazonECS',
@@ -714,7 +733,7 @@ describe('priceStacks', () => {
     function makeDynamoHandler(readCapacityUnits: number): ResourceHandler {
       return {
         resourceType: 'AWS::DynamoDB::Table',
-        isUsageBased: false,
+        pricingType: 'fixed',
         extractPricingAttributes: (_r: ResourceRecord) => ({
           billingMode: 'PROVISIONED',
           readCapacityUnits,
@@ -760,13 +779,13 @@ describe('priceStacks', () => {
     });
 
     it('does not apply RCU multiplier when billingMode is not PROVISIONED', async () => {
-      // PAY_PER_REQUEST is usage-based; calculateMonthlyCost returns null for wrong unit
+      // PAY_PER_REQUEST: attrs.pricingType override → usage-based path
       const usageBasedHandler: ResourceHandler = {
         resourceType: 'AWS::DynamoDB::Table',
-        isUsageBased: false,
+        pricingType: 'fixed',
         extractPricingAttributes: (_r: ResourceRecord) => ({
           billingMode: 'PAY_PER_REQUEST',
-          isUsageBased: true,
+          pricingType: 'usage-based' as PricingType,
         }),
         buildPricingQuery: (_a: PricingAttributes, region: string) => ({
           serviceCode: 'AmazonDynamoDB',
@@ -783,8 +802,9 @@ describe('priceStacks', () => {
 
       const [result] = await priceStacks([stack], registry, false);
 
-      // calculateMonthlyCost returns null → resource skipped
+      // attrs.pricingType='usage-based' override → resource in usageBasedResources, not pricedResources
       expect(result!.pricedResources).toHaveLength(0);
+      expect(result!.usageBasedResources).toHaveLength(1);
     });
 
     it('applies DynamoDB RCU multiplier to conditional resources', async () => {
@@ -802,6 +822,124 @@ describe('priceStacks', () => {
 
       expect(result!.conditionalResources).toHaveLength(1);
       expect(result!.conditionalResources[0]!.monthlyCost).toBeCloseTo(0.00013 * 730 * 10, 4);
+    });
+  });
+
+  describe('mixed pricingType', () => {
+    it('fixed component of mixed handler is added to pricedResources', async () => {
+      const fixedResult = makeApiResult(0.045, 'Hrs');
+      const usageResult = makeApiResult(0.045, 'GB');
+
+      mockBuildCacheKey
+        .mockReturnValueOnce('key-nat-fixed')
+        .mockReturnValueOnce('key-nat-usage');
+
+      mockFetchPrice
+        .mockResolvedValueOnce(fixedResult)
+        .mockResolvedValueOnce(usageResult);
+
+      const handler = makeMixedHandler();
+      const stack = makeStack([makeResource('NatGW', 'AWS::EC2::NatGateway')]);
+      const registry = makeRegistry(handler);
+
+      const [result] = await priceStacks([stack], registry, false);
+
+      expect(result!.pricedResources).toHaveLength(1);
+      expect(result!.pricedResources[0]).toMatchObject({
+        logicalId: 'NatGW',
+        type: 'AWS::EC2::NatGateway',
+        monthlyCost: 0.045 * 730,
+        currency: 'USD',
+      });
+    });
+
+    it('usage component of mixed handler is added to usageBasedResources', async () => {
+      const fixedResult = makeApiResult(0.045, 'Hrs');
+      const usageResult = makeApiResult(0.045, 'GB');
+
+      mockBuildCacheKey
+        .mockReturnValueOnce('key-nat-fixed')
+        .mockReturnValueOnce('key-nat-usage');
+
+      mockFetchPrice
+        .mockResolvedValueOnce(fixedResult)
+        .mockResolvedValueOnce(usageResult);
+
+      const handler = makeMixedHandler();
+      const stack = makeStack([makeResource('NatGW', 'AWS::EC2::NatGateway')]);
+      const registry = makeRegistry(handler);
+
+      const [result] = await priceStacks([stack], registry, false);
+
+      expect(result!.usageBasedResources).toHaveLength(1);
+      expect(result!.usageBasedResources[0]).toMatchObject({
+        logicalId: 'NatGW',
+        type: 'AWS::EC2::NatGateway',
+        unitPrice: 0.045,
+        unit: 'GB',
+        currency: 'USD',
+      });
+    });
+
+    it('mixed handler: both components present for same resource', async () => {
+      const fixedResult = makeApiResult(0.045, 'Hrs');
+      const usageResult = makeApiResult(0.045, 'GB');
+
+      mockBuildCacheKey
+        .mockReturnValueOnce('key-nat-fixed')
+        .mockReturnValueOnce('key-nat-usage');
+
+      mockFetchPrice
+        .mockResolvedValueOnce(fixedResult)
+        .mockResolvedValueOnce(usageResult);
+
+      const handler = makeMixedHandler();
+      const stack = makeStack([makeResource('NatGW', 'AWS::EC2::NatGateway')]);
+      const registry = makeRegistry(handler);
+
+      const [result] = await priceStacks([stack], registry, false);
+
+      expect(result!.pricedResources).toHaveLength(1);
+      expect(result!.usageBasedResources).toHaveLength(1);
+      expect(result!.pricedResources[0]!.logicalId).toBe('NatGW');
+      expect(result!.usageBasedResources[0]!.logicalId).toBe('NatGW');
+    });
+
+    it('mixed handler with usage file: fixed in pricedResources, usage moves to estimatedResources', async () => {
+      const fixedResult = makeApiResult(0.045, 'Hrs');
+      const usageResult = makeApiResult(0.045, 'GB');
+
+      mockBuildCacheKey
+        .mockReturnValueOnce('key-nat-fixed')
+        .mockReturnValueOnce('key-nat-usage');
+
+      mockFetchPrice
+        .mockResolvedValueOnce(fixedResult)
+        .mockResolvedValueOnce(usageResult);
+
+      const estimatedResult = {
+        logicalId: 'NatGW',
+        type: 'AWS::EC2::NatGateway',
+        estimatedMonthlyCost: 2.025,
+        currency: 'USD' as const,
+        basis: '45GB',
+        unitPrice: 0.045,
+        unit: 'GB',
+      };
+      mockCalculateEstimatedCost.mockReturnValue(estimatedResult);
+
+      const handler = makeMixedHandler();
+      const stack = makeStack([makeResource('NatGW', 'AWS::EC2::NatGateway')]);
+      const registry = makeRegistry(handler);
+      const usageFile = { NatGW: { storage_gb: 45 } };
+
+      const [result] = await priceStacks([stack], registry, false, usageFile);
+
+      expect(result!.pricedResources).toHaveLength(1);
+      expect(result!.pricedResources[0]!.monthlyCost).toBeCloseTo(0.045 * 730);
+      expect(result!.estimatedResources).toHaveLength(1);
+      expect(result!.estimatedResources[0]).toMatchObject(estimatedResult);
+      expect(result!.usageBasedResources).toHaveLength(0);
     });
   });
 });

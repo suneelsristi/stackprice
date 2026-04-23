@@ -20,8 +20,8 @@ describe('lambdaHandler', () => {
     expect(lambdaHandler.resourceType).toBe('AWS::Lambda::Function');
   });
 
-  it('is usage-based', () => {
-    expect(lambdaHandler.isUsageBased).toBe(true);
+  it('pricingType is usage-based', () => {
+    expect(lambdaHandler.pricingType).toBe('usage-based');
   });
 
   // ─── extractPricingAttributes ───────────────────────────────────────────────

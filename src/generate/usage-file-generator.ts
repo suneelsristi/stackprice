@@ -16,7 +16,7 @@ export const TYPE_MAP: Record<string, string> = {
   CloudFront: 'AWS::CloudFront::Distribution',
 };
 
-// Handlers registered as isUsageBased: true in the registry
+// Handlers registered as pricingType: 'usage-based' or 'mixed' in the registry
 const REGISTERED_USAGE_BASED_TYPES = new Set([
   'AWS::Lambda::Function',
   'AWS::S3::Bucket',

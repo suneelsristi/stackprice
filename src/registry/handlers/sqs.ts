@@ -9,7 +9,7 @@ interface SqsAttributes extends PricingAttributes {
 
 export const sqsHandler: ResourceHandler = {
   resourceType: 'AWS::SQS::Queue',
-  isUsageBased: true,
+  pricingType: 'usage-based',
 
   extractPricingAttributes(resource: ResourceRecord): PricingAttributes | null {
     const { properties } = resource;

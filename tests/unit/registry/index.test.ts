@@ -9,7 +9,7 @@ import type { PricingQuery, PricingApiResult } from '../../../src/pricing/types.
 function makeHandler(resourceType: string): ResourceHandler {
   return {
     resourceType,
-    isUsageBased: false,
+    pricingType: 'fixed',
     extractPricingAttributes(_resource: ResourceRecord): PricingAttributes | null {
       return {};
     },

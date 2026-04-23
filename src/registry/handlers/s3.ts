@@ -9,7 +9,7 @@ interface S3Attributes extends PricingAttributes {
 
 export const s3Handler: ResourceHandler = {
   resourceType: 'AWS::S3::Bucket',
-  isUsageBased: true,
+  pricingType: 'usage-based',
 
   extractPricingAttributes(_resource: ResourceRecord): PricingAttributes | null {
     return { storageClass: 'STANDARD' } satisfies S3Attributes;

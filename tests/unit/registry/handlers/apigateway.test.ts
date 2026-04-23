@@ -20,8 +20,8 @@ describe('apigatewayHandler', () => {
     expect(apigatewayHandler.resourceType).toBe('AWS::ApiGateway::RestApi');
   });
 
-  it('isUsageBased is true', () => {
-    expect(apigatewayHandler.isUsageBased).toBe(true);
+  it('pricingType is usage-based', () => {
+    expect(apigatewayHandler.pricingType).toBe('usage-based');
   });
 
   // ─── extractPricingAttributes ───────────────────────────────────────────────

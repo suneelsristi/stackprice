@@ -47,7 +47,7 @@ const REGION_TO_EKS_PREFIX: Record<string, string | undefined> = {
 
 export const eksHandler: ResourceHandler = {
   resourceType: 'AWS::EKS::Cluster',
-  isUsageBased: false,
+  pricingType: 'fixed',
 
   extractPricingAttributes(_resource: ResourceRecord): PricingAttributes {
     return {};

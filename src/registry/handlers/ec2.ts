@@ -11,7 +11,7 @@ interface Ec2Attributes extends PricingAttributes {
 
 export const ec2Handler: ResourceHandler = {
   resourceType: 'AWS::EC2::Instance',
-  isUsageBased: false,
+  pricingType: 'fixed',
 
   extractPricingAttributes(resource: ResourceRecord): PricingAttributes | null {
     const { properties } = resource;

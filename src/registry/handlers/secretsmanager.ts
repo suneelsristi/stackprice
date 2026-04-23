@@ -48,7 +48,7 @@ const REGION_TO_SM_PREFIX: Record<string, string | null> = {
 
 export const secretsManagerHandler: ResourceHandler = {
   resourceType: 'AWS::SecretsManager::Secret',
-  isUsageBased: false,
+  pricingType: 'fixed',
 
   extractPricingAttributes(_resource: ResourceRecord): PricingAttributes {
     return {};

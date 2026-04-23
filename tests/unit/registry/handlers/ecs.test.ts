@@ -29,8 +29,8 @@ describe('ecsHandler', () => {
     expect(ecsHandler.resourceType).toBe('AWS::ECS::TaskDefinition');
   });
 
-  it('is not usage-based', () => {
-    expect(ecsHandler.isUsageBased).toBe(false);
+  it('pricingType is fixed', () => {
+    expect(ecsHandler.pricingType).toBe('fixed');
   });
 
   // ─── extractPricingAttributes ───────────────────────────────────────────────

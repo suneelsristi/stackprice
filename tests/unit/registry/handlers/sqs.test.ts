@@ -20,8 +20,8 @@ describe('sqsHandler', () => {
     expect(sqsHandler.resourceType).toBe('AWS::SQS::Queue');
   });
 
-  it('is usage-based', () => {
-    expect(sqsHandler.isUsageBased).toBe(true);
+  it('pricingType is usage-based', () => {
+    expect(sqsHandler.pricingType).toBe('usage-based');
   });
 
   // ─── extractPricingAttributes ───────────────────────────────────────────────

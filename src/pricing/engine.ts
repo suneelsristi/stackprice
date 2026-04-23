@@ -12,7 +12,7 @@ import type {
 } from './types.js';
 import { buildCacheKey, getFromMemory, getFromFile, setInMemory, setInFile } from './cache.js';
 import { fetchPrice } from './client.js';
-import type { ResourceHandler, PricingAttributes } from '../registry/handler.js';
+import type { ResourceHandler, PricingAttributes, PricingType } from '../registry/handler.js';
 import type { ResourceRecord } from '../template/types.js';
 import { calculateEstimatedCost } from './usage-calculator.js';
 
@@ -29,6 +29,8 @@ interface WorkItem {
   result: PricingApiResult | null;
   /** True when result came from cache (no fetch needed). */
   fromCache: boolean;
+  /** Resolved classification for this specific work item. */
+  classifyAs: 'fixed' | 'usage-based';
 }
 
 // ─── Post-calculation multipliers ────────────────────────────────────────────
@@ -118,24 +120,31 @@ export async function priceStacks(
         continue;
       }
 
-      const query = handler.buildPricingQuery(attrs, stack.region);
-      const cacheKey = buildCacheKey(query, stack.region);
+      const effectivePricingType: PricingType = attrs.pricingType ?? handler.pricingType;
 
-      let cachedResult: PricingApiResult | null = null;
-      if (!noCache) {
-        cachedResult = getFromMemory(cacheKey) ?? getFromFile(cacheKey, stack.region);
+      const buildWorkItem = (
+        query: PricingQuery,
+        classifyAs: 'fixed' | 'usage-based',
+      ): WorkItem => {
+        const cacheKey = buildCacheKey(query, stack.region);
+        let cachedResult: PricingApiResult | null = null;
+        if (!noCache) {
+          cachedResult = getFromMemory(cacheKey) ?? getFromFile(cacheKey, stack.region);
+        }
+        return { resource, handler, attrs, query, cacheKey, isConditional, result: cachedResult, fromCache: cachedResult !== null, classifyAs };
+      };
+
+      if (effectivePricingType === 'mixed') {
+        workItems.push(buildWorkItem(handler.buildPricingQuery(attrs, stack.region), 'fixed'));
+        if (handler.buildUsagePricingQuery) {
+          workItems.push(buildWorkItem(handler.buildUsagePricingQuery(attrs, stack.region), 'usage-based'));
+        }
+      } else {
+        workItems.push(buildWorkItem(
+          handler.buildPricingQuery(attrs, stack.region),
+          effectivePricingType === 'usage-based' ? 'usage-based' : 'fixed',
+        ));
       }
-
-      workItems.push({
-        resource,
-        handler,
-        attrs,
-        query,
-        cacheKey,
-        isConditional,
-        result: cachedResult,
-        fromCache: cachedResult !== null,
-      });
     }
 
     // ── Phase 2: fire all uncached fetches in parallel ─────────────────────────
@@ -164,6 +173,8 @@ export async function priceStacks(
         continue;
       }
 
+      const { classifyAs } = item;
+
       if (isConditional) {
         const condResource = resource as ConditionalResourceRecord;
         const condOut: PricedConditionalResource = {
@@ -174,7 +185,7 @@ export async function priceStacks(
           currency: 'USD',
         };
 
-        if (handler.isUsageBased) {
+        if (classifyAs === 'usage-based') {
           condOut.unitPrice = result.pricePerUnit;
           condOut.unit = result.unit;
         } else {
@@ -185,7 +196,7 @@ export async function priceStacks(
         }
 
         conditionalResources.push(condOut);
-      } else if (handler.isUsageBased) {
+      } else if (classifyAs === 'usage-based') {
         const usageBasedResource: UsageBasedResource = {
           logicalId: resource.logicalId,
           type: resource.type,

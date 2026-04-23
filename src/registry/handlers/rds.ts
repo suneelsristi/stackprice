@@ -27,7 +27,7 @@ const CF_ENGINE_TO_PRICING: Record<string, string> = {
 
 export const rdsHandler: ResourceHandler = {
   resourceType: 'AWS::RDS::DBInstance',
-  isUsageBased: false,
+  pricingType: 'fixed',
 
   extractPricingAttributes(resource: ResourceRecord): PricingAttributes | null {
     const { properties } = resource;

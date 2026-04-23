@@ -20,8 +20,8 @@ describe('snsHandler', () => {
     expect(snsHandler.resourceType).toBe('AWS::SNS::Topic');
   });
 
-  it('is usage-based', () => {
-    expect(snsHandler.isUsageBased).toBe(true);
+  it('pricingType is usage-based', () => {
+    expect(snsHandler.pricingType).toBe('usage-based');
   });
 
   // ─── extractPricingAttributes ───────────────────────────────────────────────

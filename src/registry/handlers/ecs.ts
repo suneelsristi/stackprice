@@ -28,7 +28,7 @@ function requiresFargate(value: unknown): boolean {
 
 export const ecsHandler: ResourceHandler = {
   resourceType: 'AWS::ECS::TaskDefinition',
-  isUsageBased: false,
+  pricingType: 'fixed',
 
   extractPricingAttributes(resource: ResourceRecord): PricingAttributes | null {
     const { properties } = resource;

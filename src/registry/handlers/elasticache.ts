@@ -20,7 +20,7 @@ const CF_ENGINE_TO_PRICING: Record<string, string> = {
 
 export const elasticacheHandler: ResourceHandler = {
   resourceType: 'AWS::ElastiCache::CacheCluster',
-  isUsageBased: false,
+  pricingType: 'fixed',
 
   extractPricingAttributes(resource: ResourceRecord): PricingAttributes | null {
     const { properties } = resource;

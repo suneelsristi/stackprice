@@ -9,7 +9,7 @@ interface LambdaAttributes extends PricingAttributes {
 
 export const lambdaHandler: ResourceHandler = {
   resourceType: 'AWS::Lambda::Function',
-  isUsageBased: true,
+  pricingType: 'usage-based',
 
   extractPricingAttributes(resource: ResourceRecord): PricingAttributes | null {
     const { properties } = resource;

@@ -20,8 +20,8 @@ describe('eksHandler', () => {
     expect(eksHandler.resourceType).toBe('AWS::EKS::Cluster');
   });
 
-  it('isUsageBased is false', () => {
-    expect(eksHandler.isUsageBased).toBe(false);
+  it('pricingType is fixed', () => {
+    expect(eksHandler.pricingType).toBe('fixed');
   });
 
   // ─── extractPricingAttributes ───────────────────────────────────────────────

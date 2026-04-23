@@ -20,8 +20,8 @@ describe('rdsHandler', () => {
     expect(rdsHandler.resourceType).toBe('AWS::RDS::DBInstance');
   });
 
-  it('is not usage-based', () => {
-    expect(rdsHandler.isUsageBased).toBe(false);
+  it('pricingType is fixed', () => {
+    expect(rdsHandler.pricingType).toBe('fixed');
   });
 
   // ─── extractPricingAttributes ───────────────────────────────────────────────

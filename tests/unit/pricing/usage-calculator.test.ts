@@ -346,6 +346,35 @@ describe('calculateEstimatedCost', () => {
     });
   });
 
+  describe('AWS::EC2::NatGateway', () => {
+    it('calculates cost with data_transfer_gb', () => {
+      const resource = makeUsageBasedResource({
+        logicalId: 'MyNatGw',
+        type: 'AWS::EC2::NatGateway',
+        unitPrice: 0.045,
+        unit: 'GB',
+      });
+      const usage = { data_transfer_gb: 100 };
+      const result = calculateEstimatedCost(resource, usage);
+
+      expect(result).not.toBeNull();
+      expect(result!.estimatedMonthlyCost).toBeCloseTo(100 * 0.045, 5);
+      expect(result!.basis).toBe('100GB processed');
+      expect(result!.logicalId).toBe('MyNatGw');
+      expect(result!.type).toBe('AWS::EC2::NatGateway');
+    });
+
+    it('returns null when data_transfer_gb is missing', () => {
+      const resource = makeUsageBasedResource({ type: 'AWS::EC2::NatGateway' });
+      expect(calculateEstimatedCost(resource, {})).toBeNull();
+    });
+
+    it('returns null when data_transfer_gb is not a number', () => {
+      const resource = makeUsageBasedResource({ type: 'AWS::EC2::NatGateway' });
+      expect(calculateEstimatedCost(resource, { data_transfer_gb: 'lots' as unknown as number })).toBeNull();
+    });
+  });
+
   describe('unknown resource type', () => {
     it('returns null for an unrecognised type', () => {
       const resource = makeUsageBasedResource({ type: 'AWS::Unknown::Resource' });

@@ -66,6 +66,7 @@ export interface ResourceUsage {
   avg_duration_ms?: number;
   memory_mb?: number;
   storage_gb?: number;
+  data_transfer_gb?: number;
 }
 
 export type UsageFile = Record<string, ResourceUsage>;

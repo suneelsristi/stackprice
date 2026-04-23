@@ -15,6 +15,7 @@ import { fetchPrice } from './client.js';
 import type { ResourceHandler, PricingAttributes, PricingType } from '../registry/handler.js';
 import type { ResourceRecord } from '../template/types.js';
 import { calculateEstimatedCost } from './usage-calculator.js';
+import { stripCdkHash } from '../utils/string.js';
 
 // ─── Internal work item ───────────────────────────────────────────────────────
 
@@ -205,7 +206,7 @@ export async function priceStacks(
           currency: 'USD',
         };
 
-        const usageEntry = usageFile?.[resource.logicalId];
+        const usageEntry = usageFile?.[resource.logicalId] ?? usageFile?.[stripCdkHash(resource.logicalId)];
         if (usageEntry !== undefined) {
           const estimated = calculateEstimatedCost(usageBasedResource, usageEntry);
           if (estimated !== null) {

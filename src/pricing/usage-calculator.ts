@@ -69,6 +69,15 @@ export function parseUsageFile(filePath: string): UsageFile {
     if (typeof entry['storage_gb'] === 'number') {
       usage.storage_gb = entry['storage_gb'];
     }
+    if (typeof entry['data_transfer_gb'] === 'number') {
+      usage.data_transfer_gb = entry['data_transfer_gb'];
+    }
+    if (typeof entry['monthly_requests'] === 'number') {
+      usage.monthly_requests = entry['monthly_requests'];
+    }
+    if (typeof entry['monthly_transfer_gb'] === 'number') {
+      usage.monthly_transfer_gb = entry['monthly_transfer_gb'];
+    }
     result[key] = usage;
   }
 

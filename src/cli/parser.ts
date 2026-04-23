@@ -37,6 +37,7 @@ import { apigatewayHandler } from '../registry/handlers/apigateway.js';
 import { secretsManagerHandler } from '../registry/handlers/secretsmanager.js';
 import { eksHandler } from '../registry/handlers/eks.js';
 import { natGatewayHandler } from '../registry/handlers/natgateway.js';
+import { cloudFrontHandler } from '../registry/handlers/cloudfront.js';
 import { EXIT_CODES, StackPriceError } from '../errors/index.js';
 import packageJson from '../../package.json';
 
@@ -91,6 +92,7 @@ function createRegistry(): ResourceHandlerRegistry {
   registry.register(secretsManagerHandler);
   registry.register(eksHandler);
   registry.register(natGatewayHandler);
+  registry.register(cloudFrontHandler);
   return registry;
 }
 

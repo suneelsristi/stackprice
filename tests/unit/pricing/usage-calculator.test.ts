@@ -375,6 +375,59 @@ describe('calculateEstimatedCost', () => {
     });
   });
 
+  describe('AWS::CloudFront::Distribution', () => {
+    it('calculates combined cost from monthly_requests and monthly_transfer_gb', () => {
+      const resource = makeUsageBasedResource({
+        logicalId: 'MyCDN',
+        type: 'AWS::CloudFront::Distribution',
+        unitPrice: 0.00000075,
+        unit: 'Requests',
+      });
+      const usage = { monthly_requests: 1000000, monthly_transfer_gb: 100 };
+      const result = calculateEstimatedCost(resource, usage);
+
+      expect(result).not.toBeNull();
+      // requests_cost = 1000000 * 0.00000075 = 0.75
+      // transfer_cost = 100 * 0.085 = 8.5
+      // total = 9.25
+      expect(result!.estimatedMonthlyCost).toBeCloseTo(9.25, 5);
+      expect(result!.logicalId).toBe('MyCDN');
+      expect(result!.type).toBe('AWS::CloudFront::Distribution');
+      expect(result!.currency).toBe('USD');
+    });
+
+    it('basis string includes requests, GB transfer, and US zone label', () => {
+      const resource = makeUsageBasedResource({
+        type: 'AWS::CloudFront::Distribution',
+        unitPrice: 0.00000075,
+        unit: 'Requests',
+      });
+      const usage = { monthly_requests: 5000000, monthly_transfer_gb: 200 };
+      const result = calculateEstimatedCost(resource, usage);
+
+      expect(result).not.toBeNull();
+      expect(result!.basis).toBe('5000000 requests + 200GB transfer (US zone)');
+    });
+
+    it('returns null when monthly_requests is missing', () => {
+      const resource = makeUsageBasedResource({
+        type: 'AWS::CloudFront::Distribution',
+        unitPrice: 0.00000075,
+        unit: 'Requests',
+      });
+      expect(calculateEstimatedCost(resource, { monthly_transfer_gb: 100 })).toBeNull();
+    });
+
+    it('returns null when monthly_transfer_gb is missing', () => {
+      const resource = makeUsageBasedResource({
+        type: 'AWS::CloudFront::Distribution',
+        unitPrice: 0.00000075,
+        unit: 'Requests',
+      });
+      expect(calculateEstimatedCost(resource, { monthly_requests: 1000000 })).toBeNull();
+    });
+  });
+
   describe('unknown resource type', () => {
     it('returns null for an unrecognised type', () => {
       const resource = makeUsageBasedResource({ type: 'AWS::Unknown::Resource' });

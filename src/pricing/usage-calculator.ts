@@ -152,6 +152,22 @@ export function calculateEstimatedCost(
       return { logicalId, type, estimatedMonthlyCost, currency, basis, unitPrice, unit };
     }
 
+    if (type === 'AWS::CloudFront::Distribution') {
+      const { monthly_requests, monthly_transfer_gb } = usage;
+      if (monthly_requests === undefined || typeof monthly_requests !== 'number') {
+        return null;
+      }
+      if (monthly_transfer_gb === undefined || typeof monthly_transfer_gb !== 'number') {
+        return null;
+      }
+      const CLOUDFRONT_DATA_TRANSFER_RATE = 0.085; // US zone Tier 1 rate. See docs for multi-zone pricing.
+      const requests_cost = monthly_requests * unitPrice;
+      const transfer_cost = monthly_transfer_gb * CLOUDFRONT_DATA_TRANSFER_RATE;
+      const estimatedMonthlyCost = requests_cost + transfer_cost;
+      const basis = `${monthly_requests} requests + ${monthly_transfer_gb}GB transfer (US zone)`;
+      return { logicalId, type, estimatedMonthlyCost, currency, basis, unitPrice, unit };
+    }
+
     return null;
   } catch {
     return null;

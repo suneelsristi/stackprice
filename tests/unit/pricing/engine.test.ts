@@ -727,6 +727,95 @@ describe('priceStacks', () => {
       expect(result!.usageBasedResources).toHaveLength(1);
       expect(result!.estimatedResources).toHaveLength(0);
     });
+
+    it('usageFile match: full logical ID (with CDK hash) works', async () => {
+      const apiResult = makeApiResult(0.0000166667, 'GB-second');
+      mockBuildCacheKey.mockReturnValue('us-east-1:AWSLambda:location=us-east-1');
+      mockFetchPrice.mockResolvedValue(apiResult);
+
+      const estimatedResult = {
+        logicalId: 'MyLambdaABCD1234',
+        type: 'AWS::Lambda::Function',
+        estimatedMonthlyCost: 4.17,
+        currency: 'USD' as const,
+        basis: '5M req × 200ms × 256MB',
+        unitPrice: 0.0000166667,
+        unit: 'GB-second',
+      };
+      mockCalculateEstimatedCost.mockReturnValue(estimatedResult);
+
+      const handler = makeUsageHandler();
+      const stack = makeStack([makeResource('MyLambdaABCD1234', 'AWS::Lambda::Function')]);
+      const registry = makeRegistry(handler);
+
+      const usageFile = { MyLambdaABCD1234: { requests_per_month: 5000000 } };
+      const [result] = await priceStacks([stack], registry, false, usageFile);
+
+      expect(result!.estimatedResources).toHaveLength(1);
+      expect(result!.usageBasedResources).toHaveLength(0);
+    });
+
+    it('usageFile match: stripped logical ID (manually typed) also works', async () => {
+      const apiResult = makeApiResult(0.0000166667, 'GB-second');
+      mockBuildCacheKey.mockReturnValue('us-east-1:AWSLambda:location=us-east-1');
+      mockFetchPrice.mockResolvedValue(apiResult);
+
+      const estimatedResult = {
+        logicalId: 'MyLambdaABCD1234',
+        type: 'AWS::Lambda::Function',
+        estimatedMonthlyCost: 4.17,
+        currency: 'USD' as const,
+        basis: '5M req × 200ms × 256MB',
+        unitPrice: 0.0000166667,
+        unit: 'GB-second',
+      };
+      mockCalculateEstimatedCost.mockReturnValue(estimatedResult);
+
+      const handler = makeUsageHandler();
+      // Resource has full CDK logical ID with hash suffix
+      const stack = makeStack([makeResource('MyLambdaABCD1234', 'AWS::Lambda::Function')]);
+      const registry = makeRegistry(handler);
+
+      // Usage file uses stripped ID (what user sees in the table)
+      const usageFile = { MyLambda: { requests_per_month: 5000000 } };
+      const [result] = await priceStacks([stack], registry, false, usageFile);
+
+      expect(result!.estimatedResources).toHaveLength(1);
+      expect(result!.usageBasedResources).toHaveLength(0);
+    });
+
+    it('usageFile match: full ID takes priority over stripped ID when both exist', async () => {
+      const apiResult = makeApiResult(0.0000166667, 'GB-second');
+      mockBuildCacheKey.mockReturnValue('us-east-1:AWSLambda:location=us-east-1');
+      mockFetchPrice.mockResolvedValue(apiResult);
+
+      const estimatedResult = {
+        logicalId: 'MyLambdaABCD1234',
+        type: 'AWS::Lambda::Function',
+        estimatedMonthlyCost: 4.17,
+        currency: 'USD' as const,
+        basis: '5M req × 200ms × 256MB',
+        unitPrice: 0.0000166667,
+        unit: 'GB-second',
+      };
+      mockCalculateEstimatedCost.mockReturnValue(estimatedResult);
+
+      const handler = makeUsageHandler();
+      const stack = makeStack([makeResource('MyLambdaABCD1234', 'AWS::Lambda::Function')]);
+      const registry = makeRegistry(handler);
+
+      // Both full and stripped IDs present — full ID wins
+      const usageFile = {
+        MyLambdaABCD1234: { requests_per_month: 5000000 },
+        MyLambda: { requests_per_month: 9999999 },
+      };
+      await priceStacks([stack], registry, false, usageFile);
+
+      expect(mockCalculateEstimatedCost).toHaveBeenCalledWith(
+        expect.objectContaining({ logicalId: 'MyLambdaABCD1234' }),
+        { requests_per_month: 5000000 },
+      );
+    });
   });
 
   describe('DynamoDB RCU multiplier', () => {

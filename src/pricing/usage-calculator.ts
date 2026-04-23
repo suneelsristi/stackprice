@@ -133,6 +133,16 @@ export function calculateEstimatedCost(
       return { logicalId, type, estimatedMonthlyCost, currency, basis, unitPrice, unit };
     }
 
+    if (type === 'AWS::EC2::NatGateway') {
+      const { data_transfer_gb } = usage;
+      if (data_transfer_gb === undefined || typeof data_transfer_gb !== 'number') {
+        return null;
+      }
+      const estimatedMonthlyCost = data_transfer_gb * unitPrice;
+      const basis = `${data_transfer_gb}GB processed`;
+      return { logicalId, type, estimatedMonthlyCost, currency, basis, unitPrice, unit };
+    }
+
     return null;
   } catch {
     return null;

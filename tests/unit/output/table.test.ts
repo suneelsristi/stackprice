@@ -169,7 +169,7 @@ describe('formatTable', () => {
       // CDK hash suffix "5E7490E8" is stripped — displays as "ApiHandler"
       expect(result).toContain('ApiHandler');
       expect(result).not.toContain('ApiHandler5E7490E8');
-      expect(result).toContain('Estimated (usage-based with provided estimates)');
+      expect(result).toContain('▸ Estimated costs');
       expect(result).toContain('~$4.17');
       expect(result).toContain('5M req × 200ms × 256MB');
       expect(result).toContain('~ Estimated using Tier 1 pricing');
@@ -177,7 +177,7 @@ describe('formatTable', () => {
 
     it('does not show estimated table section when estimatedResources is empty', () => {
       const result = formatTable([makeStack()], true);
-      expect(result).not.toContain('Estimated (usage-based with provided estimates)');
+      expect(result).not.toContain('▸ Estimated costs');
       expect(result).not.toContain('~ Estimated using Tier 1 pricing');
     });
 
@@ -229,6 +229,85 @@ describe('formatTable', () => {
       const result = formatTable([stack], true);
       expect(result).toContain('estimated');
       expect(result).toContain('usage-based');
+    });
+  });
+
+  describe('section headings', () => {
+    it('shows ▸ Fixed monthly costs heading when pricedResources exist', () => {
+      const result = formatTable([makeStack()], true);
+      expect(result).toContain('▸ Fixed monthly costs');
+    });
+
+    it('shows ▸ Usage-based resources heading when usageBasedResources exist', () => {
+      const stack = makeStack({
+        usageBasedResources: [
+          { logicalId: 'MyLambda', type: 'AWS::Lambda::Function', unitPrice: 0.0000002, unit: 'Requests', currency: 'USD' },
+        ],
+      });
+      const result = formatTable([stack], true);
+      expect(result).toContain('▸ Usage-based resources');
+    });
+
+    it('does not show ▸ Usage-based resources heading when usageBasedResources is empty', () => {
+      const result = formatTable([makeStack()], true);
+      expect(result).not.toContain('▸ Usage-based resources');
+    });
+
+    it('shows ▸ Conditioned resources heading when conditionalResources exist', () => {
+      const stack = makeStack({
+        conditionalResources: [
+          {
+            logicalId: 'ConditionalEc2',
+            type: 'AWS::EC2::Instance',
+            conditionName: 'IsProd',
+            monthlyCost: 70.08,
+            currency: 'USD',
+          },
+        ],
+      });
+      const result = formatTable([stack], true);
+      expect(result).toContain('▸ Conditioned resources');
+    });
+
+    it('does not show ▸ Conditioned resources heading when conditionalResources is empty', () => {
+      const result = formatTable([makeStack()], true);
+      expect(result).not.toContain('▸ Conditioned resources');
+    });
+
+    it('noColor=true: section headings are present without ANSI escape codes', () => {
+      const stack = makeStack({
+        usageBasedResources: [
+          { logicalId: 'MyLambda', type: 'AWS::Lambda::Function', unitPrice: 0.0000002, unit: 'Requests', currency: 'USD' },
+        ],
+        conditionalResources: [
+          {
+            logicalId: 'ConditionalEc2',
+            type: 'AWS::EC2::Instance',
+            conditionName: 'IsProd',
+            monthlyCost: 70.08,
+            currency: 'USD',
+          },
+        ],
+      });
+      const result = formatTable([stack], true);
+      expect(result).toContain('▸ Fixed monthly costs');
+      expect(result).toContain('▸ Usage-based resources');
+      expect(result).toContain('▸ Conditioned resources');
+      const lines = result.split('\n');
+      const headingLines = lines.filter((l) => l.startsWith('▸'));
+      expect(headingLines.length).toBeGreaterThan(0);
+      for (const line of headingLines) {
+        expect(line).not.toMatch(/\x1b\[/);
+      }
+    });
+
+    it('plain content rows do not start with ▸', () => {
+      const result = formatTable([makeStack()], true);
+      const lines = result.split('\n');
+      const tableContentLines = lines.filter((l) => l.includes('│'));
+      for (const line of tableContentLines) {
+        expect(line).not.toMatch(/^▸/);
+      }
     });
   });
 

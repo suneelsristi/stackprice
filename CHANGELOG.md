@@ -3,6 +3,42 @@
 All notable changes to stackprice are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com).
 
+## [0.5.0] - 2026-04-23
+
+### Added
+- `stackprice generate usage-file` command — generates a pre-populated
+  YAML or JSON usage estimates file from the CDK cloud assembly without
+  requiring AWS credentials. Supports --stack, --format, --out-file,
+  --force, and --types flags.
+- AWS::EC2::NatGateway handler — first mixed pricingType handler.
+  Fixed hourly cost ($0.045/hr = $32.85/month) shown in fixed cost
+  table. Data processing ($0.045/GB) shown in usage-based table.
+  Provide data_transfer_gb in --usage-file for estimated data costs.
+- AWS::CloudFront::Distribution handler — usage-based pricing using
+  US zone Tier 1 rates ($0.00000075/request). Provide monthly_requests
+  and monthly_transfer_gb in --usage-file for full cost estimate.
+- Section headings in table output — bold ▸ labels before each table
+  section (Fixed monthly costs, Usage-based resources, Estimated costs,
+  Conditioned resources) for clarity when multiple sections are present.
+
+### Changed
+- pricingType enum replaces isUsageBased boolean across the entire
+  codebase. Handlers now declare pricingType: 'fixed', 'usage-based',
+  or 'mixed'. Mixed handlers implement both buildPricingQuery (fixed
+  component) and buildUsagePricingQuery (usage-based component).
+- Usage file matching now accepts both full logical IDs
+  (ApiHandler5E7490E8) and display names without the CDK hash suffix
+  (ApiHandler) — both resolve correctly.
+- parseUsageFile whitelist extended: data_transfer_gb,
+  monthly_requests, monthly_transfer_gb added.
+- stripCdkHash extracted to src/utils/string.ts — shared between
+  table formatter and pricing engine.
+
+### Fixed
+- Usage file entries keyed by stripped logical ID (display name) now
+  correctly match resources whose full ID has a CDK hash suffix.
+  Previously these were silently ignored.
+
 ## [0.4.0] - 2026-04-22
 
 ### Added

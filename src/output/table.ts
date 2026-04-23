@@ -101,21 +101,32 @@ export function formatTable(stacks: PricedStack[], noColor: boolean): string {
     const stackHeader = header(`Stack: ${stack.stackId}   Region: ${stack.region}`, noColor);
     lines.push(stackHeader);
 
+    let firstSection = true;
+
+    const pushHeading = (text: string): void => {
+      if (!firstSection) lines.push('');
+      lines.push(chalk.bold(text));
+      firstSection = false;
+    };
+
     if (stack.pricedResources.length > 0) {
+      pushHeading('▸ Fixed monthly costs');
       lines.push(buildFixedTable(stack, noColor));
     }
 
     if (stack.estimatedResources.length > 0) {
-      lines.push(header('Estimated (usage-based with provided estimates)', noColor));
+      pushHeading('▸ Estimated costs');
       lines.push(buildEstimatedTable(stack, noColor));
       lines.push('~ Estimated using Tier 1 pricing. Actual costs may be lower at high volume.');
     }
 
     if (stack.usageBasedResources.length > 0) {
+      pushHeading('▸ Usage-based resources');
       lines.push(buildUsageTable(stack, noColor));
     }
 
     if (stack.conditionalResources.length > 0) {
+      pushHeading('▸ Conditioned resources');
       lines.push(buildConditionalTable(stack, noColor));
     }
 

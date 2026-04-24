@@ -503,6 +503,45 @@ describe('calculateEstimatedCost', () => {
     });
   });
 
+  describe('AWS::KinesisFirehose::DeliveryStream', () => {
+    it('calculates cost with ingestion_gb', () => {
+      const resource = makeUsageBasedResource({
+        type: 'AWS::KinesisFirehose::DeliveryStream',
+        unitPrice: 0.08,
+        unit: 'GB',
+      });
+      const result = calculateEstimatedCost(resource, { ingestion_gb: 100 });
+
+      expect(result).not.toBeNull();
+      expect(result!.estimatedMonthlyCost).toBeCloseTo(8.0);
+      expect(result!.basis).toBe('100GB ingested');
+      expect(result!.logicalId).toBe(resource.logicalId);
+      expect(result!.type).toBe('AWS::KinesisFirehose::DeliveryStream');
+    });
+
+    it('returns null when ingestion_gb is missing', () => {
+      const resource = makeUsageBasedResource({ type: 'AWS::KinesisFirehose::DeliveryStream' });
+      expect(calculateEstimatedCost(resource, {})).toBeNull();
+    });
+
+    it('returns null when ingestion_gb is not a number', () => {
+      const resource = makeUsageBasedResource({ type: 'AWS::KinesisFirehose::DeliveryStream' });
+      expect(
+        calculateEstimatedCost(resource, { ingestion_gb: 'lots' as unknown as number }),
+      ).toBeNull();
+    });
+
+    it('basis string uses correct format', () => {
+      const resource = makeUsageBasedResource({
+        type: 'AWS::KinesisFirehose::DeliveryStream',
+        unitPrice: 0.08,
+        unit: 'GB',
+      });
+      const result = calculateEstimatedCost(resource, { ingestion_gb: 500 });
+      expect(result!.basis).toBe('500GB ingested');
+    });
+  });
+
   describe('unknown resource type', () => {
     it('returns null for an unrecognised type', () => {
       const resource = makeUsageBasedResource({ type: 'AWS::Unknown::Resource' });

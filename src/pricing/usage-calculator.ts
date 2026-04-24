@@ -171,6 +171,16 @@ export function calculateEstimatedCost(
       return { logicalId, type, estimatedMonthlyCost, currency, basis, unitPrice, unit };
     }
 
+    if (type === 'AWS::KinesisFirehose::DeliveryStream') {
+      const { ingestion_gb } = usage;
+      if (ingestion_gb === undefined || typeof ingestion_gb !== 'number') {
+        return null;
+      }
+      const estimatedMonthlyCost = ingestion_gb * unitPrice;
+      const basis = `${ingestion_gb}GB ingested`;
+      return { logicalId, type, estimatedMonthlyCost, currency, basis, unitPrice, unit };
+    }
+
     if (type === 'AWS::Logs::LogGroup') {
       const ingestion = usage.ingestion_gb ?? 0;
       const storage = usage.storage_gb ?? 0;

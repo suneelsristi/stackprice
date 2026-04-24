@@ -267,6 +267,55 @@ describe('discoverUsageResources', () => {
 
     expect(resources).toHaveLength(0);
   });
+
+  it('excludes CDK internal Lambda (Handler: __entrypoint__.handler) from discovery', () => {
+    mockReadAssembly.mockReturnValue(makeAssembly([{ id: 'MyStack', templateFile: 'MyStack.template.json' }]));
+    mockReadFileSync.mockReturnValue(makeTemplate({
+      CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E: {
+        Type: 'AWS::Lambda::Function',
+        Properties: { Handler: '__entrypoint__.handler', Runtime: 'nodejs20.x' },
+      },
+      MyUserLambda: {
+        Type: 'AWS::Lambda::Function',
+        Properties: { Handler: 'index.handler', Runtime: 'nodejs20.x' },
+      },
+    }));
+
+    const resources = discoverUsageResources('./cdk.out');
+
+    expect(resources).toHaveLength(1);
+    expect(resources[0]!.logicalId).toBe('MyUserLambda');
+  });
+
+  it('includes regular Lambda (non-CDK-internal) in discovery', () => {
+    mockReadAssembly.mockReturnValue(makeAssembly([{ id: 'MyStack', templateFile: 'MyStack.template.json' }]));
+    mockReadFileSync.mockReturnValue(makeTemplate({
+      MyFunc: {
+        Type: 'AWS::Lambda::Function',
+        Properties: { Handler: 'dist/handler.main', Runtime: 'nodejs20.x' },
+      },
+    }));
+
+    const resources = discoverUsageResources('./cdk.out');
+
+    expect(resources).toHaveLength(1);
+    expect(resources[0]!.logicalId).toBe('MyFunc');
+  });
+
+  it('CDK internal Lambda filter does not affect other resource types', () => {
+    mockReadAssembly.mockReturnValue(makeAssembly([{ id: 'MyStack', templateFile: 'MyStack.template.json' }]));
+    mockReadFileSync.mockReturnValue(makeTemplate({
+      MyBucket: { Type: 'AWS::S3::Bucket', Properties: { Handler: '__entrypoint__.handler' } },
+      MyQueue: { Type: 'AWS::SQS::Queue', Properties: { Handler: '__entrypoint__.handler' } },
+    }));
+
+    const resources = discoverUsageResources('./cdk.out');
+
+    expect(resources).toHaveLength(2);
+    const types = resources.map((r) => r.type);
+    expect(types).toContain('AWS::S3::Bucket');
+    expect(types).toContain('AWS::SQS::Queue');
+  });
 });
 
 // ─── generateYaml ─────────────────────────────────────────────────────────────

@@ -78,6 +78,9 @@ export function parseUsageFile(filePath: string): UsageFile {
     if (typeof entry['monthly_transfer_gb'] === 'number') {
       usage.monthly_transfer_gb = entry['monthly_transfer_gb'];
     }
+    if (typeof entry['ingestion_gb'] === 'number') {
+      usage.ingestion_gb = entry['ingestion_gb'];
+    }
     result[key] = usage;
   }
 
@@ -165,6 +168,30 @@ export function calculateEstimatedCost(
       const transfer_cost = monthly_transfer_gb * CLOUDFRONT_DATA_TRANSFER_RATE;
       const estimatedMonthlyCost = requests_cost + transfer_cost;
       const basis = `${monthly_requests} requests + ${monthly_transfer_gb}GB transfer (US zone)`;
+      return { logicalId, type, estimatedMonthlyCost, currency, basis, unitPrice, unit };
+    }
+
+    if (type === 'AWS::Logs::LogGroup') {
+      const ingestion = usage.ingestion_gb ?? 0;
+      const storage = usage.storage_gb ?? 0;
+      if (ingestion === 0 && storage === 0) {
+        return null;
+      }
+      // Storage rate hardcoded — verify at https://aws.amazon.com/cloudwatch/pricing/
+      const CLOUDWATCH_STORAGE_RATE = 0.03;
+      const ingestion_cost = ingestion * unitPrice;
+      const storage_cost = storage * CLOUDWATCH_STORAGE_RATE;
+      const estimatedMonthlyCost = ingestion_cost + storage_cost;
+
+      let basis: string;
+      if (ingestion > 0 && storage > 0) {
+        basis = `${ingestion}GB ingested + ${storage}GB stored`;
+      } else if (ingestion > 0) {
+        basis = `${ingestion}GB ingested`;
+      } else {
+        basis = `${storage}GB stored`;
+      }
+
       return { logicalId, type, estimatedMonthlyCost, currency, basis, unitPrice, unit };
     }
 

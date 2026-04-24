@@ -380,14 +380,16 @@ export function discoverUsageResources(
     const templateResources = readTemplateResources(templatePath);
 
     for (const r of templateResources) {
-      if (includedCfnTypes.has(r.type)) {
-        resources.push({
-          logicalId: r.logicalId,
-          type: r.type,
-          stackId: stackManifest.id,
-          properties: r.properties,
-        });
-      }
+      if (!includedCfnTypes.has(r.type)) continue;
+
+      if (r.type === 'AWS::Lambda::Function' && r.properties['Handler'] === '__entrypoint__.handler') continue;
+
+      resources.push({
+        logicalId: r.logicalId,
+        type: r.type,
+        stackId: stackManifest.id,
+        properties: r.properties,
+      });
     }
   }
 

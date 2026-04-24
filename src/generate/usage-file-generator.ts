@@ -14,7 +14,8 @@ export const TYPE_MAP: Record<string, string> = {
   ApiGateway:   'AWS::ApiGateway::RestApi',
   NatGateway:   'AWS::EC2::NatGateway',
   CloudFront:   'AWS::CloudFront::Distribution',
-  LogsLogGroup: 'AWS::Logs::LogGroup',
+  LogsLogGroup:           'AWS::Logs::LogGroup',
+  FirehoseDeliveryStream: 'AWS::KinesisFirehose::DeliveryStream',
 };
 
 // Handlers registered as pricingType: 'usage-based' or 'mixed' in the registry
@@ -25,6 +26,7 @@ const REGISTERED_USAGE_BASED_TYPES = new Set([
   'AWS::SNS::Topic',
   'AWS::ApiGateway::RestApi',
   'AWS::Logs::LogGroup',
+  'AWS::KinesisFirehose::DeliveryStream',
 ]);
 
 // Not yet registered but planned — include anyway for future-proofing
@@ -48,6 +50,7 @@ const TYPE_ORDER = [
   'AWS::EC2::NatGateway',
   'AWS::CloudFront::Distribution',
   'AWS::Logs::LogGroup',
+  'AWS::KinesisFirehose::DeliveryStream',
 ];
 
 // ─── Exported interfaces ──────────────────────────────────────────────────────
@@ -281,17 +284,28 @@ function cloudwatchlogsYamlEntry(resource: UsageResource): string[] {
   return lines;
 }
 
+function firehoseYamlEntry(resource: UsageResource): string[] {
+  const lines: string[] = [];
+  const { logicalId } = resource;
+
+  lines.push(`${logicalId}:`);
+  lines.push(commentLine('  ingestion_gb: 0', 'TODO: GB of data ingested per month'));
+
+  return lines;
+}
+
 function generateYamlEntry(resource: UsageResource): string[] {
   switch (resource.type) {
-    case 'AWS::Lambda::Function':         return lambdaYamlEntry(resource);
-    case 'AWS::S3::Bucket':               return s3YamlEntry(resource);
-    case 'AWS::SQS::Queue':               return sqsYamlEntry(resource);
-    case 'AWS::SNS::Topic':               return snsYamlEntry(resource);
-    case 'AWS::ApiGateway::RestApi':      return apigatewayYamlEntry(resource);
-    case 'AWS::EC2::NatGateway':          return natgatewayYamlEntry(resource);
-    case 'AWS::CloudFront::Distribution': return cloudfrontYamlEntry(resource);
-    case 'AWS::Logs::LogGroup':           return cloudwatchlogsYamlEntry(resource);
-    default:                              return [];
+    case 'AWS::Lambda::Function':                    return lambdaYamlEntry(resource);
+    case 'AWS::S3::Bucket':                          return s3YamlEntry(resource);
+    case 'AWS::SQS::Queue':                          return sqsYamlEntry(resource);
+    case 'AWS::SNS::Topic':                          return snsYamlEntry(resource);
+    case 'AWS::ApiGateway::RestApi':                 return apigatewayYamlEntry(resource);
+    case 'AWS::EC2::NatGateway':                     return natgatewayYamlEntry(resource);
+    case 'AWS::CloudFront::Distribution':            return cloudfrontYamlEntry(resource);
+    case 'AWS::Logs::LogGroup':                      return cloudwatchlogsYamlEntry(resource);
+    case 'AWS::KinesisFirehose::DeliveryStream':     return firehoseYamlEntry(resource);
+    default:                                          return [];
   }
 }
 
@@ -347,6 +361,10 @@ function buildJsonEntry(resource: UsageResource): Record<string, unknown> {
       entry['_note'] = 'Storage rate ($0.03/GB-month) is hardcoded';
       entry['ingestion_gb'] = 0;
       entry['storage_gb'] = 0;
+      break;
+    }
+    case 'AWS::KinesisFirehose::DeliveryStream': {
+      entry['ingestion_gb'] = 0;
       break;
     }
     default:

@@ -40,6 +40,7 @@ import { natGatewayHandler } from '../registry/handlers/natgateway.js';
 import { cloudFrontHandler } from '../registry/handlers/cloudfront.js';
 import { kinesisHandler } from '../registry/handlers/kinesis.js';
 import { cloudWatchLogsHandler } from '../registry/handlers/cloudwatchlogs.js';
+import { firehoseHandler } from '../registry/handlers/firehose.js';
 import { EXIT_CODES, StackPriceError } from '../errors/index.js';
 import packageJson from '../../package.json';
 
@@ -97,6 +98,7 @@ function createRegistry(): ResourceHandlerRegistry {
   registry.register(cloudFrontHandler);
   registry.register(kinesisHandler);
   registry.register(cloudWatchLogsHandler);
+  registry.register(firehoseHandler);
   return registry;
 }
 

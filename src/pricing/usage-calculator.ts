@@ -81,6 +81,9 @@ export function parseUsageFile(filePath: string): UsageFile {
     if (typeof entry['ingestion_gb'] === 'number') {
       usage.ingestion_gb = entry['ingestion_gb'];
     }
+    if (typeof entry['monthly_transitions'] === 'number') {
+      usage.monthly_transitions = entry['monthly_transitions'];
+    }
     result[key] = usage;
   }
 
@@ -203,6 +206,31 @@ export function calculateEstimatedCost(
       }
 
       return { logicalId, type, estimatedMonthlyCost, currency, basis, unitPrice, unit };
+    }
+
+    if (type === 'AWS::StepFunctions::StateMachine') {
+      const { monthly_transitions, monthly_requests, avg_duration_ms } = usage;
+
+      if (monthly_transitions !== undefined) {
+        // Standard workflow — charged per state transition
+        const estimatedMonthlyCost = monthly_transitions * unitPrice;
+        const basis = `${monthly_transitions} state transitions`;
+        return { logicalId, type, estimatedMonthlyCost, currency, basis, unitPrice, unit };
+      }
+
+      if (monthly_requests !== undefined && avg_duration_ms !== undefined) {
+        // Express workflow — charged per request + duration × memory
+        const memory_mb = usage.memory_mb ?? 64;
+        const gb_seconds = (memory_mb / 1024) * (avg_duration_ms / 1000) * monthly_requests;
+        const request_cost = monthly_requests * unitPrice;
+        const STEPFUNCTIONS_EXPRESS_DURATION_RATE = 0.0000167;
+        const duration_cost = gb_seconds * STEPFUNCTIONS_EXPRESS_DURATION_RATE;
+        const estimatedMonthlyCost = request_cost + duration_cost;
+        const basis = `${monthly_requests} requests × ${avg_duration_ms}ms × ${memory_mb}MB`;
+        return { logicalId, type, estimatedMonthlyCost, currency, basis, unitPrice, unit };
+      }
+
+      return null;
     }
 
     return null;

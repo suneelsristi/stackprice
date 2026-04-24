@@ -204,6 +204,15 @@ describe('parseUsageFile', () => {
     expect(() => parseUsageFile('/some/usage.txt')).toThrow('--usage-file must be');
     expect(mockReadFileSync).not.toHaveBeenCalled();
   });
+
+  it('parses monthly_transitions for Step Functions Standard workflows', () => {
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue('yaml content');
+    mockYamlLoad.mockReturnValue({ MyStateMachine: { monthly_transitions: 1000000 } });
+
+    const result = parseUsageFile('/some/usage.yml');
+    expect(result).toEqual({ MyStateMachine: { monthly_transitions: 1000000 } });
+  });
 });
 
 describe('calculateEstimatedCost', () => {
@@ -539,6 +548,107 @@ describe('calculateEstimatedCost', () => {
       });
       const result = calculateEstimatedCost(resource, { ingestion_gb: 500 });
       expect(result!.basis).toBe('500GB ingested');
+    });
+  });
+
+  describe('AWS::StepFunctions::StateMachine (Standard)', () => {
+    it('calculates cost from monthly_transitions', () => {
+      const resource = makeUsageBasedResource({
+        type: 'AWS::StepFunctions::StateMachine',
+        unitPrice: 0.000025,
+        unit: 'StateTransitions',
+      });
+      const result = calculateEstimatedCost(resource, { monthly_transitions: 1000000 });
+
+      expect(result).not.toBeNull();
+      expect(result!.estimatedMonthlyCost).toBeCloseTo(25.0);
+      expect(result!.basis).toBe('1000000 state transitions');
+      expect(result!.logicalId).toBe(resource.logicalId);
+      expect(result!.type).toBe('AWS::StepFunctions::StateMachine');
+    });
+
+    it('returns null when monthly_transitions is missing', () => {
+      const resource = makeUsageBasedResource({
+        type: 'AWS::StepFunctions::StateMachine',
+        unitPrice: 0.000025,
+        unit: 'StateTransitions',
+      });
+      expect(calculateEstimatedCost(resource, {})).toBeNull();
+    });
+
+    it('basis string uses correct format', () => {
+      const resource = makeUsageBasedResource({
+        type: 'AWS::StepFunctions::StateMachine',
+        unitPrice: 0.000025,
+        unit: 'StateTransitions',
+      });
+      const result = calculateEstimatedCost(resource, { monthly_transitions: 500 });
+      expect(result!.basis).toBe('500 state transitions');
+    });
+  });
+
+  describe('AWS::StepFunctions::StateMachine (Express)', () => {
+    it('calculates combined request + duration cost', () => {
+      const resource = makeUsageBasedResource({
+        type: 'AWS::StepFunctions::StateMachine',
+        unitPrice: 0.000001,
+        unit: 'Requests',
+      });
+      const usage = { monthly_requests: 1000000, avg_duration_ms: 100, memory_mb: 64 };
+      const result = calculateEstimatedCost(resource, usage);
+
+      expect(result).not.toBeNull();
+      // request_cost = 1_000_000 * 0.000001 = 1.0
+      // gb_seconds = (64/1024) * (100/1000) * 1_000_000 = 6250
+      // duration_cost = 6250 * 0.0000167 = 0.10437...
+      // total ≈ 1.10437
+      expect(result!.estimatedMonthlyCost).toBeCloseTo(1.10437, 3);
+      expect(result!.basis).toBe('1000000 requests × 100ms × 64MB');
+      expect(result!.type).toBe('AWS::StepFunctions::StateMachine');
+    });
+
+    it('defaults memory_mb to 64 when absent', () => {
+      const resource = makeUsageBasedResource({
+        type: 'AWS::StepFunctions::StateMachine',
+        unitPrice: 0.000001,
+        unit: 'Requests',
+      });
+      const result = calculateEstimatedCost(resource, { monthly_requests: 100, avg_duration_ms: 200 });
+
+      expect(result).not.toBeNull();
+      expect(result!.basis).toContain('64MB');
+    });
+
+    it('returns null when monthly_requests is missing', () => {
+      const resource = makeUsageBasedResource({
+        type: 'AWS::StepFunctions::StateMachine',
+        unitPrice: 0.000001,
+        unit: 'Requests',
+      });
+      expect(calculateEstimatedCost(resource, { avg_duration_ms: 100 })).toBeNull();
+    });
+
+    it('returns null when avg_duration_ms is missing', () => {
+      const resource = makeUsageBasedResource({
+        type: 'AWS::StepFunctions::StateMachine',
+        unitPrice: 0.000001,
+        unit: 'Requests',
+      });
+      expect(calculateEstimatedCost(resource, { monthly_requests: 1000000 })).toBeNull();
+    });
+
+    it('basis string uses correct format', () => {
+      const resource = makeUsageBasedResource({
+        type: 'AWS::StepFunctions::StateMachine',
+        unitPrice: 0.000001,
+        unit: 'Requests',
+      });
+      const result = calculateEstimatedCost(resource, {
+        monthly_requests: 5000000,
+        avg_duration_ms: 500,
+        memory_mb: 128,
+      });
+      expect(result!.basis).toBe('5000000 requests × 500ms × 128MB');
     });
   });
 

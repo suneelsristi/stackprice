@@ -70,6 +70,7 @@ export interface ResourceUsage {
   monthly_requests?: number;
   monthly_transfer_gb?: number;
   ingestion_gb?: number;
+  monthly_transitions?: number;
 }
 
 export type UsageFile = Record<string, ResourceUsage>;

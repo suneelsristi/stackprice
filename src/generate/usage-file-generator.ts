@@ -16,6 +16,7 @@ export const TYPE_MAP: Record<string, string> = {
   CloudFront:   'AWS::CloudFront::Distribution',
   LogsLogGroup:           'AWS::Logs::LogGroup',
   FirehoseDeliveryStream: 'AWS::KinesisFirehose::DeliveryStream',
+  StepFunctions:          'AWS::StepFunctions::StateMachine',
 };
 
 // Handlers registered as pricingType: 'usage-based' or 'mixed' in the registry
@@ -27,6 +28,7 @@ const REGISTERED_USAGE_BASED_TYPES = new Set([
   'AWS::ApiGateway::RestApi',
   'AWS::Logs::LogGroup',
   'AWS::KinesisFirehose::DeliveryStream',
+  'AWS::StepFunctions::StateMachine',
 ]);
 
 // Not yet registered but planned — include anyway for future-proofing
@@ -51,6 +53,7 @@ const TYPE_ORDER = [
   'AWS::CloudFront::Distribution',
   'AWS::Logs::LogGroup',
   'AWS::KinesisFirehose::DeliveryStream',
+  'AWS::StepFunctions::StateMachine',
 ];
 
 // ─── Exported interfaces ──────────────────────────────────────────────────────
@@ -294,6 +297,27 @@ function firehoseYamlEntry(resource: UsageResource): string[] {
   return lines;
 }
 
+function stepFunctionsYamlEntry(resource: UsageResource): string[] {
+  const lines: string[] = [];
+  const { properties, logicalId } = resource;
+
+  const isExpress = properties['StateMachineType'] === 'EXPRESS';
+
+  if (isExpress) {
+    lines.push(`# AWS::StepFunctions::StateMachine (Express)`);
+    lines.push(`${logicalId}:`);
+    lines.push(commentLine('  monthly_requests: 0', 'TODO: workflow executions per month'));
+    lines.push(commentLine('  avg_duration_ms: 0', 'TODO: average execution duration in ms'));
+    lines.push(commentLine('  memory_mb: 64', 'pre-filled (Express default)'));
+  } else {
+    lines.push(`# AWS::StepFunctions::StateMachine (Standard)`);
+    lines.push(`${logicalId}:`);
+    lines.push(commentLine('  monthly_transitions: 0', 'TODO: state transitions per month'));
+  }
+
+  return lines;
+}
+
 function generateYamlEntry(resource: UsageResource): string[] {
   switch (resource.type) {
     case 'AWS::Lambda::Function':                    return lambdaYamlEntry(resource);
@@ -305,6 +329,7 @@ function generateYamlEntry(resource: UsageResource): string[] {
     case 'AWS::CloudFront::Distribution':            return cloudfrontYamlEntry(resource);
     case 'AWS::Logs::LogGroup':                      return cloudwatchlogsYamlEntry(resource);
     case 'AWS::KinesisFirehose::DeliveryStream':     return firehoseYamlEntry(resource);
+    case 'AWS::StepFunctions::StateMachine':         return stepFunctionsYamlEntry(resource);
     default:                                          return [];
   }
 }
@@ -365,6 +390,19 @@ function buildJsonEntry(resource: UsageResource): Record<string, unknown> {
     }
     case 'AWS::KinesisFirehose::DeliveryStream': {
       entry['ingestion_gb'] = 0;
+      break;
+    }
+    case 'AWS::StepFunctions::StateMachine': {
+      const isExpress = p['StateMachineType'] === 'EXPRESS';
+      if (isExpress) {
+        entry['_workflow_type'] = 'Express';
+        entry['monthly_requests'] = 0;
+        entry['avg_duration_ms'] = 0;
+        entry['memory_mb'] = 64;
+      } else {
+        entry['_workflow_type'] = 'Standard';
+        entry['monthly_transitions'] = 0;
+      }
       break;
     }
     default:

@@ -3,6 +3,38 @@
 All notable changes to stackprice are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com).
 
+## [0.6.0] - 2026-04-24
+
+### Added
+- AWS::Kinesis::Stream handler — supports both PROVISIONED
+  (per-shard hourly, $0.015/shard-hour) and ON_DEMAND
+  (per-stream hourly, $0.04/stream-hour) capacity modes.
+  ShardCount and StreamMode read from CDK template.
+- CDK internal Lambda functions now excluded from
+  stackprice generate usage-file output. Framework-managed
+  Lambdas (e.g. CustomResource providers) no longer appear
+  in generated usage estimate files.
+
+### Changed
+- RDS handler now includes storage cost in the monthly total.
+  AllocatedStorage and StorageType are read from the CDK
+  template. Storage rates are hardcoded (see disclaimer in
+  output) and cover gp2, gp3, io1, io2, and standard storage
+  types for both Single-AZ and Multi-AZ deployments.
+  Example: db.t3.micro with 20GB gp2 Single-AZ now shows
+  $14.71/month ($12.41 instance + $2.30 storage) instead
+  of $12.41/month.
+- Table output now shows a † disclaimer when RDS resources
+  are priced, noting that storage rates are hardcoded and
+  linking to the AWS RDS pricing page for verification.
+
+### Known Limitations
+- RDS io1/io2 IOPS charges are not included — only storage
+  GB cost. IOPS pricing requires a separate Pricing API
+  query and is deferred to a future release.
+- Kinesis Extended Retention and Enhanced Fan-Out charges
+  are not included — only base shard/stream-hour cost.
+
 ## [0.5.0] - 2026-04-23
 
 ### Added

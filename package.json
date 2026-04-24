@@ -1,6 +1,6 @@
 {
   "name": "stackprice",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "AWS CDK infrastructure pricing estimation CLI — know what it costs before you deploy",
   "keywords": [
     "aws",

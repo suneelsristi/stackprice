@@ -157,5 +157,12 @@ export function formatTable(stacks: PricedStack[], noColor: boolean): string {
 
   lines.push(totalLine);
 
+  const hasRdsResources = stacks.some((s) =>
+    s.pricedResources.some((r) => r.type === 'AWS::RDS::DBInstance'),
+  );
+  if (hasRdsResources) {
+    lines.push('† RDS storage cost uses hardcoded rates (last verified 2026-04-24).\n  Verify current rates at https://aws.amazon.com/rds/pricing/');
+  }
+
   return lines.join('\n');
 }

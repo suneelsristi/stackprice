@@ -100,8 +100,10 @@ export interface ResourceHandler {
   /**
    * Compute the monthly cost from a single Pricing API result.
    * Returns null if the result has an unexpected unit or is otherwise unusable.
+   * attrs is optional and passed through from the engine for handlers that need
+   * resource-level properties (e.g. RDS storage configuration) in cost calculation.
    */
-  calculateMonthlyCost(result: PricingApiResult): MonthlyPrice | null;
+  calculateMonthlyCost(result: PricingApiResult, attrs?: PricingAttributes): MonthlyPrice | null;
 
   /**
    * Build the usage-based component query for mixed handlers.

@@ -7,6 +7,8 @@ interface RdsAttributes extends PricingAttributes {
   instanceType: string;
   databaseEngine: string;
   multiAZ: boolean;
+  allocatedStorage: number;
+  storageType: string;
 }
 
 /**
@@ -23,6 +25,43 @@ const CF_ENGINE_TO_PRICING: Record<string, string> = {
   'sqlserver-web': 'SQL Server',
   'sqlserver-se': 'SQL Server',
   'sqlserver-ee': 'SQL Server',
+};
+
+/**
+ * HARDCODED: RDS storage rates per GB-month, verified against
+ * the AWS Pricing API on 2026-04-24.
+ *
+ * Verification command (run per storage type):
+ *   aws pricing get-products --service-code AmazonRDS \
+ *     --region us-east-1 \
+ *     --filters \
+ *       "Type=TERM_MATCH,Field=productFamily,Value=Database Storage" \
+ *       "Type=TERM_MATCH,Field=location,Value=US East (N. Virginia)" \
+ *       "Type=TERM_MATCH,Field=volumeType,Value=General Purpose" \
+ *       "Type=TERM_MATCH,Field=deploymentOption,Value=Single-AZ"
+ *
+ * If AWS changes storage pricing, update both maps below,
+ * update the verified date in this comment, and update the
+ * hardcoded pricing table in CLAUDE.md.
+ * Reference: https://aws.amazon.com/rds/pricing/
+ *
+ * Note: Multi-AZ rates are approximately 2× Single-AZ rates.
+ * io1 and io2 IOPS charges are NOT included — only storage GB cost.
+ */
+const STORAGE_RATES_SINGLE_AZ: Record<string, number> = {
+  'gp2':      0.115,
+  'gp3':      0.115,
+  'io1':      0.125,
+  'io2':      0.125,
+  'standard': 0.100,
+};
+
+const STORAGE_RATES_MULTI_AZ: Record<string, number> = {
+  'gp2':      0.230,
+  'gp3':      0.230,
+  'io1':      0.250,
+  'io2':      0.250,
+  'standard': 0.200,
 };
 
 export const rdsHandler: ResourceHandler = {
@@ -44,7 +83,17 @@ export const rdsHandler: ResourceHandler = {
     const databaseEngine = CF_ENGINE_TO_PRICING[engine];
     if (databaseEngine === undefined) return null;
 
-    return { instanceType: instanceClass, databaseEngine, multiAZ } satisfies RdsAttributes;
+    const allocatedStorageRaw = properties['AllocatedStorage'];
+    const allocatedStorage = typeof allocatedStorageRaw === 'number'
+      ? Math.floor(allocatedStorageRaw)
+      : 20;
+
+    const storageTypeRaw = properties['StorageType'];
+    const storageType = typeof storageTypeRaw === 'string'
+      ? storageTypeRaw.toLowerCase()
+      : 'gp2';
+
+    return { instanceType: instanceClass, databaseEngine, multiAZ, allocatedStorage, storageType } satisfies RdsAttributes;
   },
 
   buildPricingQuery(attributes: PricingAttributes, region: string): PricingQuery {
@@ -63,11 +112,22 @@ export const rdsHandler: ResourceHandler = {
     };
   },
 
-  calculateMonthlyCost(result: PricingApiResult): MonthlyPrice | null {
+  calculateMonthlyCost(result: PricingApiResult, attrs?: PricingAttributes): MonthlyPrice | null {
     if (result.unit !== 'Hrs') return null;
+
+    const instanceCost = result.pricePerUnit * 730;
+
+    const allocatedStorage = (attrs?.['allocatedStorage'] as number | undefined) ?? 20;
+    const storageType = (attrs?.['storageType'] as string | undefined) ?? 'gp2';
+    const multiAZ = (attrs?.['multiAZ'] as boolean | undefined) ?? false;
+
+    const rateMap = multiAZ ? STORAGE_RATES_MULTI_AZ : STORAGE_RATES_SINGLE_AZ;
+    const storageRate = rateMap[storageType] ?? rateMap['gp2']!;
+    const storageCost = allocatedStorage * storageRate;
+
     return {
-      amount: result.pricePerUnit * 730,
-      currency: result.currency,
+      amount: instanceCost + storageCost,
+      currency: 'USD',
       unit: result.unit,
     };
   },

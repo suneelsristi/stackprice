@@ -273,9 +273,17 @@ cost diff on PRs.
 | `AWS::ApiGateway::RestApi` | Usage-based (REST API calls, Tier 1 rate) |
 | `AWS::CloudFront::Distribution` | Usage-based (requests + data transfer, US zone) |
 | `AWS::Kinesis::Stream` | Fixed (provisioned: $0.015/shard-hour × shards × 730; on-demand: $0.04/stream-hour × 730) |
+| `AWS::Logs::LogGroup` | Usage-based (ingestion $0.50/GB + storage $0.03/GB-month †) |
+| `AWS::KinesisFirehose::DeliveryStream` | Usage-based (Direct PUT ingestion $0.08/GB) |
+| `AWS::StepFunctions::StateMachine` | Usage-based (Standard: $0.000025/transition; Express: per-request + duration) |
 
 † RDS storage cost uses hardcoded rates verified 2026-04-24.
   See [AWS RDS Pricing](https://aws.amazon.com/rds/pricing/) for current rates.
+
+† CloudWatch Logs storage rate ($0.03/GB-month) uses a hardcoded
+  rate verified 2026-04-24. See
+  [AWS CloudWatch Pricing](https://aws.amazon.com/cloudwatch/pricing/)
+  for current rates.
 
 Unsupported resource types are skipped with a warning and listed at the end of output.
 They never cause the tool to fail.
@@ -309,15 +317,15 @@ and never sends your template data to any external service. All processing is lo
 
 ## Roadmap
 
-**Shipped:** see [CHANGELOG](CHANGELOG.md) for the full history of v0.1.0 through v0.6.0.
+**Shipped:** see [CHANGELOG](CHANGELOG.md) for the full history of v0.1.0 through v0.7.0.
 
 **Planned:**
 
 | Version | Feature |
 | --- | --- |
-| v0.7.0 | GitHub Action — `suneelsristi/stackprice-action` for PR comments |
-| v0.7.0 | Kinesis Data Firehose handler |
-| v0.7.0 | RDS IOPS pricing (io1/io2) |
+| v0.8.0 | GitHub Action — `suneelsristi/stackprice-action` for PR comments |
+| v0.8.0 | RDS IOPS pricing (io1/io2) |
+| v0.8.0 | AWS::EC2::EIP — pending Pricing API availability |
 | v1.0.0 | Native CloudFormation template support (outside CDK) |
 | v1.0.0 | VS Code extension with inline cost annotations |
 

@@ -26,16 +26,15 @@ const REGISTERED_USAGE_BASED_TYPES = new Set([
   'AWS::SQS::Queue',
   'AWS::SNS::Topic',
   'AWS::ApiGateway::RestApi',
+  'AWS::EC2::NatGateway',
+  'AWS::CloudFront::Distribution',
   'AWS::Logs::LogGroup',
   'AWS::KinesisFirehose::DeliveryStream',
   'AWS::StepFunctions::StateMachine',
 ]);
 
 // Not yet registered but planned — include anyway for future-proofing
-const UPCOMING_USAGE_BASED_TYPES = new Set([
-  'AWS::EC2::NatGateway',
-  'AWS::CloudFront::Distribution',
-]);
+const UPCOMING_USAGE_BASED_TYPES = new Set<string>();
 
 const ALL_USAGE_BASED_TYPES = new Set([
   ...REGISTERED_USAGE_BASED_TYPES,

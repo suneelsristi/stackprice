@@ -7,13 +7,14 @@ import { readAssembly } from '../assembly/reader.js';
 // ─── Type map (short name → CloudFormation type) ──────────────────────────────
 
 export const TYPE_MAP: Record<string, string> = {
-  Lambda:     'AWS::Lambda::Function',
-  S3:         'AWS::S3::Bucket',
-  SQS:        'AWS::SQS::Queue',
-  SNS:        'AWS::SNS::Topic',
-  ApiGateway: 'AWS::ApiGateway::RestApi',
-  NatGateway: 'AWS::EC2::NatGateway',
-  CloudFront: 'AWS::CloudFront::Distribution',
+  Lambda:       'AWS::Lambda::Function',
+  S3:           'AWS::S3::Bucket',
+  SQS:          'AWS::SQS::Queue',
+  SNS:          'AWS::SNS::Topic',
+  ApiGateway:   'AWS::ApiGateway::RestApi',
+  NatGateway:   'AWS::EC2::NatGateway',
+  CloudFront:   'AWS::CloudFront::Distribution',
+  LogsLogGroup: 'AWS::Logs::LogGroup',
 };
 
 // Handlers registered as pricingType: 'usage-based' or 'mixed' in the registry
@@ -23,9 +24,10 @@ const REGISTERED_USAGE_BASED_TYPES = new Set([
   'AWS::SQS::Queue',
   'AWS::SNS::Topic',
   'AWS::ApiGateway::RestApi',
+  'AWS::Logs::LogGroup',
 ]);
 
-// Not yet registered but planned for v0.5.0 — include anyway for future-proofing
+// Not yet registered but planned — include anyway for future-proofing
 const UPCOMING_USAGE_BASED_TYPES = new Set([
   'AWS::EC2::NatGateway',
   'AWS::CloudFront::Distribution',
@@ -45,6 +47,7 @@ const TYPE_ORDER = [
   'AWS::ApiGateway::RestApi',
   'AWS::EC2::NatGateway',
   'AWS::CloudFront::Distribution',
+  'AWS::Logs::LogGroup',
 ];
 
 // ─── Exported interfaces ──────────────────────────────────────────────────────
@@ -266,6 +269,18 @@ function cloudfrontYamlEntry(resource: UsageResource): string[] {
   return lines;
 }
 
+function cloudwatchlogsYamlEntry(resource: UsageResource): string[] {
+  const lines: string[] = [];
+  const { logicalId } = resource;
+
+  lines.push('# Storage rate ($0.03/GB-month) is hardcoded');
+  lines.push(`${logicalId}:`);
+  lines.push(commentLine('  ingestion_gb: 0', 'TODO: GB of log data ingested per month'));
+  lines.push(commentLine('  storage_gb: 0', 'TODO: GB of logs stored (average)'));
+
+  return lines;
+}
+
 function generateYamlEntry(resource: UsageResource): string[] {
   switch (resource.type) {
     case 'AWS::Lambda::Function':         return lambdaYamlEntry(resource);
@@ -275,6 +290,7 @@ function generateYamlEntry(resource: UsageResource): string[] {
     case 'AWS::ApiGateway::RestApi':      return apigatewayYamlEntry(resource);
     case 'AWS::EC2::NatGateway':          return natgatewayYamlEntry(resource);
     case 'AWS::CloudFront::Distribution': return cloudfrontYamlEntry(resource);
+    case 'AWS::Logs::LogGroup':           return cloudwatchlogsYamlEntry(resource);
     default:                              return [];
   }
 }
@@ -325,6 +341,12 @@ function buildJsonEntry(resource: UsageResource): Record<string, unknown> {
       entry['_note'] = 'Prices shown for US edge locations. Actual costs vary by geographic zone.';
       entry['monthly_requests'] = 0;
       entry['monthly_transfer_gb'] = 0;
+      break;
+    }
+    case 'AWS::Logs::LogGroup': {
+      entry['_note'] = 'Storage rate ($0.03/GB-month) is hardcoded';
+      entry['ingestion_gb'] = 0;
+      entry['storage_gb'] = 0;
       break;
     }
     default:

@@ -428,6 +428,81 @@ describe('calculateEstimatedCost', () => {
     });
   });
 
+  describe('AWS::Logs::LogGroup', () => {
+    it('calculates combined cost from ingestion_gb and storage_gb', () => {
+      const resource = makeUsageBasedResource({
+        logicalId: 'AppLogGroup',
+        type: 'AWS::Logs::LogGroup',
+        unitPrice: 0.50,
+        unit: 'GB',
+      });
+      const usage = { ingestion_gb: 10, storage_gb: 50 };
+      const result = calculateEstimatedCost(resource, usage);
+
+      expect(result).not.toBeNull();
+      // ingestion_cost = 10 * 0.50 = 5.00
+      // storage_cost   = 50 * 0.03 = 1.50
+      // total = 6.50
+      expect(result!.estimatedMonthlyCost).toBeCloseTo(6.50, 5);
+      expect(result!.logicalId).toBe('AppLogGroup');
+      expect(result!.type).toBe('AWS::Logs::LogGroup');
+      expect(result!.currency).toBe('USD');
+    });
+
+    it('calculates ingestion-only cost when storage_gb is absent', () => {
+      const resource = makeUsageBasedResource({
+        type: 'AWS::Logs::LogGroup',
+        unitPrice: 0.50,
+        unit: 'GB',
+      });
+      const usage = { ingestion_gb: 10 };
+      const result = calculateEstimatedCost(resource, usage);
+
+      expect(result).not.toBeNull();
+      expect(result!.estimatedMonthlyCost).toBeCloseTo(5.00, 5);
+      expect(result!.basis).toBe('10GB ingested');
+    });
+
+    it('calculates storage-only cost when ingestion_gb is absent', () => {
+      const resource = makeUsageBasedResource({
+        type: 'AWS::Logs::LogGroup',
+        unitPrice: 0.50,
+        unit: 'GB',
+      });
+      const usage = { storage_gb: 100 };
+      const result = calculateEstimatedCost(resource, usage);
+
+      expect(result).not.toBeNull();
+      // ingestion_cost = 0 * 0.50 = 0.00
+      // storage_cost   = 100 * 0.03 = 3.00
+      expect(result!.estimatedMonthlyCost).toBeCloseTo(3.00, 5);
+      expect(result!.basis).toBe('100GB stored');
+    });
+
+    it('returns null when both ingestion_gb and storage_gb are absent', () => {
+      const resource = makeUsageBasedResource({ type: 'AWS::Logs::LogGroup' });
+      expect(calculateEstimatedCost(resource, {})).toBeNull();
+    });
+
+    it('returns null when both ingestion_gb and storage_gb are zero', () => {
+      const resource = makeUsageBasedResource({ type: 'AWS::Logs::LogGroup' });
+      expect(calculateEstimatedCost(resource, { ingestion_gb: 0, storage_gb: 0 })).toBeNull();
+    });
+
+    it('basis includes both components when both are non-zero', () => {
+      const resource = makeUsageBasedResource({
+        type: 'AWS::Logs::LogGroup',
+        unitPrice: 0.50,
+        unit: 'GB',
+      });
+      const usage = { ingestion_gb: 10, storage_gb: 50 };
+      const result = calculateEstimatedCost(resource, usage);
+
+      expect(result).not.toBeNull();
+      expect(result!.basis).toBe('10GB ingested + 50GB stored');
+    });
+  });
+
   describe('unknown resource type', () => {
     it('returns null for an unrecognised type', () => {
       const resource = makeUsageBasedResource({ type: 'AWS::Unknown::Resource' });

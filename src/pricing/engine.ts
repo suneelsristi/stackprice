@@ -190,7 +190,7 @@ export async function priceStacks(
           condOut.unitPrice = result.pricePerUnit;
           condOut.unit = result.unit;
         } else {
-          const monthlyPrice = handler.calculateMonthlyCost(result);
+          const monthlyPrice = handler.calculateMonthlyCost(result, attrs);
           if (monthlyPrice !== null) {
             condOut.monthlyCost = applyMultipliers(resource.type, monthlyPrice.amount, attrs);
           }
@@ -218,7 +218,7 @@ export async function priceStacks(
           usageBasedResources.push(usageBasedResource);
         }
       } else {
-        const monthlyPrice = handler.calculateMonthlyCost(result);
+        const monthlyPrice = handler.calculateMonthlyCost(result, attrs);
         if (monthlyPrice !== null) {
           pricedResources.push({
             logicalId: resource.logicalId,

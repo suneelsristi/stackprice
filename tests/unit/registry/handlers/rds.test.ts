@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { rdsHandler } from '../../../../src/registry/handlers/rds.js';
 import type { ResourceRecord } from '../../../../src/template/types.js';
 import type { PricingApiResult } from '../../../../src/pricing/types.js';
+import type { PricingAttributes } from '../../../../src/registry/handler.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -166,6 +167,41 @@ describe('rdsHandler', () => {
       );
       expect(attrs!['multiAZ']).toBe(true);
     });
+
+    it('allocatedStorage extracted correctly', () => {
+      const attrs = rdsHandler.extractPricingAttributes(
+        makeResource({ DBInstanceClass: 'db.t3.medium', Engine: 'mysql', AllocatedStorage: 50 }),
+      );
+      expect(attrs!['allocatedStorage']).toBe(50);
+    });
+
+    it('allocatedStorage defaults to 20 when absent', () => {
+      const attrs = rdsHandler.extractPricingAttributes(
+        makeResource({ DBInstanceClass: 'db.t3.medium', Engine: 'mysql' }),
+      );
+      expect(attrs!['allocatedStorage']).toBe(20);
+    });
+
+    it('storageType extracted and lowercased', () => {
+      const attrs = rdsHandler.extractPricingAttributes(
+        makeResource({ DBInstanceClass: 'db.t3.medium', Engine: 'mysql', StorageType: 'GP2' }),
+      );
+      expect(attrs!['storageType']).toBe('gp2');
+    });
+
+    it('storageType defaults to gp2 when absent', () => {
+      const attrs = rdsHandler.extractPricingAttributes(
+        makeResource({ DBInstanceClass: 'db.t3.medium', Engine: 'mysql' }),
+      );
+      expect(attrs!['storageType']).toBe('gp2');
+    });
+
+    it('multiAZ extracted correctly', () => {
+      const attrs = rdsHandler.extractPricingAttributes(
+        makeResource({ DBInstanceClass: 'db.t3.medium', Engine: 'mysql', MultiAZ: true }),
+      );
+      expect(attrs!['multiAZ']).toBe(true);
+    });
   });
 
   // ─── buildPricingQuery ──────────────────────────────────────────────────────
@@ -246,10 +282,11 @@ describe('rdsHandler', () => {
   // ─── calculateMonthlyCost ───────────────────────────────────────────────────
 
   describe('calculateMonthlyCost', () => {
-    it('returns pricePerUnit × 730 for unit Hrs', () => {
+    it('returns instance cost + default storage cost for unit Hrs', () => {
       const price = rdsHandler.calculateMonthlyCost(makeResult({ pricePerUnit: 0.24 }));
       expect(price).not.toBeNull();
-      expect(price!.amount).toBeCloseTo(0.24 * 730);
+      // defaults: 20GB gp2 single-AZ → 20 * 0.115 = 2.30
+      expect(price!.amount).toBeCloseTo(0.24 * 730 + 20 * 0.115);
     });
 
     it('preserves currency and unit', () => {
@@ -267,9 +304,71 @@ describe('rdsHandler', () => {
     });
 
     it('calculates correctly for a zero pricePerUnit', () => {
-      expect(rdsHandler.calculateMonthlyCost(makeResult({ pricePerUnit: 0 }))!.amount).toBe(
-        0,
+      // only storage cost remains: 20GB gp2 = 2.30
+      expect(rdsHandler.calculateMonthlyCost(makeResult({ pricePerUnit: 0 }))!.amount).toBeCloseTo(
+        20 * 0.115,
       );
+    });
+
+    // ─── Storage cost scenarios ─────────────────────────────────────────────
+
+    describe('storage cost component', () => {
+      const pricePerUnit = 0.24;
+      const instanceCost = pricePerUnit * 730;
+
+      function makeAttrs(storageProps: Record<string, unknown> = {}): PricingAttributes {
+        return rdsHandler.extractPricingAttributes(
+          makeResource({ DBInstanceClass: 'db.t3.medium', Engine: 'mysql', ...storageProps }),
+        )!;
+      }
+
+      it('gp2 Single-AZ: instance + gp2 storage cost', () => {
+        const attrs = makeAttrs({ AllocatedStorage: 100, StorageType: 'gp2', MultiAZ: false });
+        const price = rdsHandler.calculateMonthlyCost(makeResult({ pricePerUnit }), attrs);
+        expect(price!.amount).toBeCloseTo(instanceCost + 100 * 0.115);
+      });
+
+      it('gp3 Single-AZ: instance + gp3 storage cost (same rate as gp2)', () => {
+        const attrs = makeAttrs({ AllocatedStorage: 100, StorageType: 'gp3', MultiAZ: false });
+        const price = rdsHandler.calculateMonthlyCost(makeResult({ pricePerUnit }), attrs);
+        expect(price!.amount).toBeCloseTo(instanceCost + 100 * 0.115);
+      });
+
+      it('io1 Single-AZ: instance + io1 storage cost', () => {
+        const attrs = makeAttrs({ AllocatedStorage: 100, StorageType: 'io1', MultiAZ: false });
+        const price = rdsHandler.calculateMonthlyCost(makeResult({ pricePerUnit }), attrs);
+        expect(price!.amount).toBeCloseTo(instanceCost + 100 * 0.125);
+      });
+
+      it('standard Single-AZ: instance + magnetic storage cost', () => {
+        const attrs = makeAttrs({ AllocatedStorage: 100, StorageType: 'standard', MultiAZ: false });
+        const price = rdsHandler.calculateMonthlyCost(makeResult({ pricePerUnit }), attrs);
+        expect(price!.amount).toBeCloseTo(instanceCost + 100 * 0.100);
+      });
+
+      it('Multi-AZ: instance + 2× storage rate', () => {
+        const attrs = makeAttrs({ AllocatedStorage: 100, StorageType: 'gp2', MultiAZ: true });
+        const price = rdsHandler.calculateMonthlyCost(makeResult({ pricePerUnit }), attrs);
+        expect(price!.amount).toBeCloseTo(instanceCost + 100 * 0.230);
+      });
+
+      it('AllocatedStorage absent: defaults to 20GB', () => {
+        const attrs = makeAttrs({ StorageType: 'gp2', MultiAZ: false });
+        const price = rdsHandler.calculateMonthlyCost(makeResult({ pricePerUnit }), attrs);
+        expect(price!.amount).toBeCloseTo(instanceCost + 20 * 0.115);
+      });
+
+      it('StorageType absent: defaults to gp2 rate', () => {
+        const attrs = makeAttrs({ AllocatedStorage: 100, MultiAZ: false });
+        const price = rdsHandler.calculateMonthlyCost(makeResult({ pricePerUnit }), attrs);
+        expect(price!.amount).toBeCloseTo(instanceCost + 100 * 0.115);
+      });
+
+      it('Unknown StorageType: falls back to gp2 rate', () => {
+        const attrs = makeAttrs({ AllocatedStorage: 100, StorageType: 'io3', MultiAZ: false });
+        const price = rdsHandler.calculateMonthlyCost(makeResult({ pricePerUnit }), attrs);
+        expect(price!.amount).toBeCloseTo(instanceCost + 100 * 0.115);
+      });
     });
   });
 });

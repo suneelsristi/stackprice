@@ -3,6 +3,36 @@
 All notable changes to stackprice are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com).
 
+## [0.7.0] - 2026-04-24
+
+### Added
+- AWS::Logs::LogGroup handler — usage-based pricing with two
+  components: log ingestion ($0.50/GB via Pricing API, Tier 1)
+  and log storage ($0.03/GB-month hardcoded). Provide ingestion_gb
+  and/or storage_gb in --usage-file for estimated monthly cost.
+- AWS::KinesisFirehose::DeliveryStream handler — usage-based
+  pricing at $0.08/GB data ingested via Direct PUT. Provide
+  ingestion_gb in --usage-file for estimated monthly cost.
+  Note: eu-west-1 uses EUW1 prefix (not EU like other services).
+- AWS::StepFunctions::StateMachine handler — supports both
+  Standard ($0.000025/state transition) and Express
+  ($0.000001/request + $0.0000167/GB-second duration) workflows.
+  Workflow type detected from StateMachineType in CDK template.
+  Provide monthly_transitions (Standard) or monthly_requests +
+  avg_duration_ms + memory_mb (Express) in --usage-file.
+
+### Changed
+- generate usage-file: AWS::EC2::NatGateway and
+  AWS::CloudFront::Distribution moved from upcoming to registered
+  types — both handlers have been fully implemented since v0.5.0.
+
+### Known Limitations
+- AWS::EC2::EIP (Elastic IP) not supported — pricing is on the
+  VPC pricing page, not queryable via the AWS Price List API.
+- Step Functions Express duration rate ($0.0000167/GB-second)
+  is hardcoded. See CLAUDE.md Hardcoded Pricing Values table.
+- CloudWatch Logs storage rate ($0.03/GB-month) is hardcoded.
+
 ## [0.6.0] - 2026-04-24
 
 ### Added

@@ -259,7 +259,7 @@ cost diff on PRs.
 | Resource Type | Pricing Model |
 | --- | --- |
 | `AWS::EC2::Instance` | Fixed (on-demand hourly × 730 hrs/month) |
-| `AWS::RDS::DBInstance` | Fixed (on-demand hourly × 730 hrs/month) |
+| `AWS::RDS::DBInstance` | Fixed (instance hourly × 730 hrs/month + storage per GB-month †) |
 | `AWS::ECS::TaskDefinition` | Fixed (Fargate vCPU + memory × 730 hrs/month) |
 | `AWS::DynamoDB::Table` | Fixed (provisioned) or Usage-based (on-demand) |
 | `AWS::ElastiCache::CacheCluster` | Fixed (on-demand hourly × 730 hrs/month) |
@@ -272,6 +272,10 @@ cost diff on PRs.
 | `AWS::SNS::Topic` | Usage-based (notifications) |
 | `AWS::ApiGateway::RestApi` | Usage-based (REST API calls, Tier 1 rate) |
 | `AWS::CloudFront::Distribution` | Usage-based (requests + data transfer, US zone) |
+| `AWS::Kinesis::Stream` | Fixed (provisioned: $0.015/shard-hour × shards × 730; on-demand: $0.04/stream-hour × 730) |
+
+† RDS storage cost uses hardcoded rates verified 2026-04-24.
+  See [AWS RDS Pricing](https://aws.amazon.com/rds/pricing/) for current rates.
 
 Unsupported resource types are skipped with a warning and listed at the end of output.
 They never cause the tool to fail.
@@ -305,14 +309,15 @@ and never sends your template data to any external service. All processing is lo
 
 ## Roadmap
 
-**Shipped:** see [CHANGELOG](CHANGELOG.md) for the full history of v0.1.0 through v0.5.0.
+**Shipped:** see [CHANGELOG](CHANGELOG.md) for the full history of v0.1.0 through v0.6.0.
 
 **Planned:**
 
 | Version | Feature |
 | --- | --- |
-| v0.6.0 | GitHub Action — `suneelsristi/stackprice-action` for PR comments |
-| v0.6.0 | CloudFront multi-zone pricing support |
+| v0.7.0 | GitHub Action — `suneelsristi/stackprice-action` for PR comments |
+| v0.7.0 | Kinesis Data Firehose handler |
+| v0.7.0 | RDS IOPS pricing (io1/io2) |
 | v1.0.0 | Native CloudFormation template support (outside CDK) |
 | v1.0.0 | VS Code extension with inline cost annotations |
 

@@ -30,7 +30,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com).
 - AWS::EC2::EIP (Elastic IP) not supported — pricing is on the
   VPC pricing page, not queryable via the AWS Price List API.
 - Step Functions Express duration rate ($0.0000167/GB-second)
-  is hardcoded. See CLAUDE.md Hardcoded Pricing Values table.
+  is hardcoded.
 - CloudWatch Logs storage rate ($0.03/GB-month) is hardcoded.
 
 ## [0.6.0] - 2026-04-24

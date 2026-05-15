@@ -3,6 +3,22 @@
 All notable changes to stackprice are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com).
 
+## [0.7.1] - 2026-05-15
+
+### Changed
+- Dependency updates: @aws-sdk/client-pricing, @aws-sdk/credential-providers,
+  @typescript-eslint/eslint-plugin, @typescript-eslint/parser, eslint,
+  vitest — all patch/minor version bumps via Dependabot.
+- chalk v5.x ignored in Dependabot — stackprice uses CommonJS
+  (chalk v5 is ESM-only and incompatible).
+
+### Added
+- CONTRIBUTING.md — development setup, handler authoring guide,
+  code standards, testing requirements, commit and branch conventions.
+- Pull request template — checklist for contributors.
+- Security policy (SECURITY.md).
+- Issue templates — bug report and feature request.
+
 ## [0.7.0] - 2026-04-24
 
 ### Added

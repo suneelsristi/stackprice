@@ -9,6 +9,11 @@ updates:
       day: monday
       time: "09:00"
       timezone: Asia/Kolkata
+    ignore:
+      - dependency-name: "chalk"
+        versions: ["5.x", ">=5.0.0"]
+      - dependency-name: "commander"
+        versions: ["15.x", ">=15.0.0"]
     open-pull-requests-limit: 5
     labels:
       - dependencies

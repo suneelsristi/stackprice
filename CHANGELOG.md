@@ -3,6 +3,28 @@
 All notable changes to stackprice are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com).
 
+## [0.7.2] - 2026-10-07
+
+### Security
+- Resolved dev dependency vulnerabilities via npm audit fix:
+  js-yaml (GHSA-52cp-r559-cp3m, GHSA-5p4m-2wfm-xmqj,
+  GHSA-2883-xcg3-v3hh), brace-expansion (multiple DoS advisories),
+  vitest/mocker (GHSA-82fw-gwwq-j7x9), nanoid (GHSA-28wg-ghj8-5hjv,
+  GHSA-2v37-7h3g-55p8), postcss (GHSA-fxqj-rqcc-2cmp,
+  GHSA-r28c-9q8g-f849), source-map-js (GHSA-68fv-2mgg-jv7q).
+  All affected packages are dev/test dependencies only —
+  stackprice's runtime is not affected.
+
+### Changed
+- Dependency updates: @aws-sdk/client-pricing, @aws-sdk/credential-providers,
+  @typescript-eslint/eslint-plugin, @typescript-eslint/parser,
+  @types/node, eslint — patch/minor version bumps via Dependabot.
+- GitHub Actions updated: actions/checkout v6 → v7,
+  actions/setup-node v6 → v7.
+- Dependabot ignore rules added for js-yaml v5.x (ESM/API breaking
+  changes; v4.3.2 patched via npm audit fix covers security fixes),
+  in addition to existing ignores for chalk v5.x and commander v15.x.
+
 ## [0.7.1] - 2026-05-15
 
 ### Changed
